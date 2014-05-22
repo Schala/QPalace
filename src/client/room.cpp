@@ -2,7 +2,6 @@
 
 void RoomDesc::read(QDataStream &data) {
 	quint8 length;
-	QDataStream room_data;
 	
 	ServerMsg::read(data, refnum);
 	data >> flags >> faces_id >> room_id >> room_name_offs >> img_name_offs >> artist_name_offs >>
