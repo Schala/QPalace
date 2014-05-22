@@ -1,21 +1,33 @@
-# Compiled Object files
-*.slo
+._*
+.directory
+.DS_Store
+.localized
+desktop.ini
+Makefile
+Thumbs.db
+*.a
+*.app
+*.dll
+*.exe
+*.ilk
+*.la
+*.lai
+*.lastbuildstate
+*.lib
 *.lo
+*.manifest
+*.mo
+*.ncb
 *.o
 *.obj
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
 *.out
-*.app
+*.pbxuser
+*.pdb
+*.Plo
+*.po
+*.res
+*.sdf
+*.suo
+*.tlo
+*.tlog
+*.user
