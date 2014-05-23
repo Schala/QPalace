@@ -13,6 +13,8 @@
 #define RF_WIZARDSONLY				0x0080
 #define RF_DROPZONE						0x0100
 
+#define GATE_ID 86
+
 struct Point {
 	qint16 v, h;
 };
