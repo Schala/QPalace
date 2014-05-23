@@ -7,11 +7,7 @@
 class RoomDesc final: public ServerMsg {
 public:
 	RoomDesc():
-		id(MSG_ROOMDESC),
-		refnum(0),
-		bg_img_name(""),
-		artist_name("") {};
-	
+		id(MSG_ROOMDESC), refnum(0), bg_img_name(""), artist_name("") {};
 	void read(QDataStream &data);
 private:
 	qint32 flags, faces_id;
