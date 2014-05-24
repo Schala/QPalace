@@ -4,6 +4,7 @@
 #include <QByteArray>
 #include <QStack>
 #include "alarm.h"
+#include "execcontext.h"
 
 #define STACK_DEPTH 2048
 #define RECURSION_LIMIT 256

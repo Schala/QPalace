@@ -4,6 +4,7 @@
 #include <QTimerEvent>
 #include <algorithm>
 #include "manager.h"
+#include "token.h"
 
 class IptAlarm {
 	Q_OBJECT
