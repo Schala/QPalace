@@ -8,14 +8,18 @@
 #include <QSet>
 #include <QSharedData>
 #include <QSharedDataPointer>
+#include <QtGlobal>
 
-struct QPPoint final {
-	short x, y;
+/*struct QPPoint final
+{
+	qint16 x, y;
 };
 
-class QPHotspot final {
+class QPHotspot final
+{
 public:
-	enum {
+	enum
+	{
 		Normal = 0,
 		Door,
 		ShutableDoor,
@@ -23,7 +27,8 @@ public:
 		Bolt,
 		NavArea
 	};
-	enum ScriptEvent {
+	enum ScriptEvent
+	{
 		Select = 0x00000001,
 		Lock = 0x00000002,
 		Unlock = 0x00000004,
@@ -52,34 +57,34 @@ public:
 	};
 	Q_DECLARE_FLAGS(ScriptEvents, ScriptEvent)
 #ifdef SERVER
-	QPHotspot(short room_id, short id);
+	QPHotspot(qint16 room_id, qint16 id);
 #else
 	QPHotspot(QDataStream &buf);
 #endif // SERVER
 	~QPHotspot();
 private:
-	int mScriptEventMask, mFlags;
+	qint32 mScriptEventMask, mFlags;
 	QPPoint mLoc;
-	short mID, mDest, mType, mState;
-	QHash<short, QPPoint> mImgStates; // id, loc
+	qint16 mId, mDest, mType, mState;
+	QHash<qint16, QPPoint> mImgStates; // id, loc
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QPHotspot::ScriptEvents)
 
-struct QPLooseProp final {
-	int link;
-	QHash<int, int> spec; // id, crc
-	int flags, clientArbitrary;
+struct QPLooseProp final
+{
+	qint32 link;
+	QHash<qint32, qint32> spec; // id, crc
+	qint32 flags, clientArbitrary;
 	QPPoint location;
-}
+}*/
 
-class QPConnection final: public QSharedData;
-typedef QSharedDataPointer<QPConnection> QPConnectionPtr;
-
-class QPRoom final: virtual public QSharedData, virtual public QObject {
+class QPRoom final: virtual public QObject, virtual public QSharedData
+{
 	Q_OBJECT
 public:
-	enum Flag {
+	enum Flag
+	{
 		AuthorLocked = 0x0001,
 		Private = 0x0002,
 		NoPainting = 0x0004,
@@ -91,24 +96,22 @@ public:
 		DropZone = 0x0100
 	};
 	Q_DECLARE_FLAGS(Flags, Flag)
-#ifdef SERVER
-	QPRoom(short id);
-	QByteArray& description() const;
+/*#ifdef SERVER
+	QPRoom(qint16 id);
+	const char* description() const;
 #else
-	inline QPRoom(QDataStream &buf) {
-		description(buf);
-	};
+	QPRoom(QDataStream &buf) { description(buf); }
 	void description(QDataStream &buf);
 #endif // SERVER
 	~QPRoom();
 private:
 	QSet<QPConnectionPtr> mConnections;
-	int mFlags, mFacesID;
-	short mID;
+	qint32 mFlags, mFacesId;
+	qint16 mId;
 	QSet<QPHotspot*> mHotspots;
-	QHash<short, short> mImages; // id, alpha
+	QHash<qint16, qint16> mImages; // id, alpha
 	QSet<QPLooseProp*> mLProps;
-	QByteArray mName, mImgName, mArtistName, mPwd;
+	QByteArray mName, mImgName, mArtistName, mPwd;*/
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QPRoom::Flags)

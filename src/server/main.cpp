@@ -6,35 +6,45 @@
 #include <QJsonObject>
 #include <QStandardPaths>
 #include <QStringList>
+#include <QTextStream>
+#include <QtGlobal>
 
-#include "../crypt.hpp"
-#include "../room.hpp"
-#include "../connection.hpp"
 #include "server.hpp" 
 
-void genConfig(QJsonObject &data) {
+void genConfig(QJsonObject &data)
+{
 	data["name"] = "A QPalace Server";
 	data["port"] = 9998;
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
 	QCoreApplication app(argc, argv);
-	app.applicationName("QPalace Server");
-	app.applicationVersion("0.0");
-	app.organizationDomain("https://github.com/Schala/QPalace");
+	app.setApplicationName("QPalace Server");
+	app.setApplicationVersion("0.0");
+	app.setOrganizationDomain("https://github.com/Schala/QPalace");
+	
+	QString outMsg;
+	QTextStream ts(&outMsg);
 	
 	QCommandLineParser argParser;
 	argParser.addHelpOption();
 	argParser.addVersionOption();
-	QCommandLineOption genConfigOption(QStringList() << "conf" << "Generate a new `qpserver.conf` in " +
-		QStandardPaths::displayName(QStandardPaths::ConfigLocation));
+	ts << "Generate a new `qpserver.conf` in " << QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
+	QCommandLineOption genConfigOption(QStringList() << "conf", outMsg);
 	argParser.addOption(genConfigOption);
 	argParser.process(app);
 	
-	if (argParser.isSet(genConfigOption)) {
-		QFile genConfFile(QStandardPaths::displayName(QStandardPaths::ConfigLocation)+"/qpserver.conf");
-		if (!genConfFile.open(QIODevice::WriteOnly)) {
-			qFatal("Unable to write "+genConfFile.fileName().toLocal8Bit().data());
+	outMsg.clear();
+	ts << QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) << "/qpserver.conf";
+	QString confLoc(outMsg);
+	
+	if (argParser.isSet(genConfigOption))
+	{
+		QFile genConfFile(confLoc);
+		if (!genConfFile.open(QIODevice::WriteOnly))
+		{
+			qFatal("Unable to write %s\n", genConfFile.fileName().toLocal8Bit().data());
 			return -1;
 		}
 		QJsonObject genConfData;
@@ -44,20 +54,25 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 	
-	QPServer server();
+	QPServer server;
 	
-	QFile confFile(QStandardPaths::displayName(QStandardPaths::ConfigLocation)+"/qpserver.conf");
-	if (!confFile.open(QIODevice::ReadOnly)) {
-		qFatal("Unable to open "+confFile.fileName().toLocal8Bit().data());
+	QFile confFile(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)+"/qpserver.conf");
+	if (!confFile.open(QIODevice::ReadOnly))
+	{
+		qFatal("Unable to open %s\n", confFile.fileName().toLocal8Bit().data());
 		return -1;
 	}
 	QByteArray confData = confFile.readAll();
 	QJsonDocument confJson(QJsonDocument::fromJson(confData));
-	if (!server.load(confJson.object())) {
-		qFatal("Unable to parse "+confFile.fileName().toLocal8Bit().data());
+	if (!server.loadConf(confJson.object()))
+	{
+		qFatal("Unable to write %s\n", confFile.fileName().toLocal8Bit().data());
 		return -1;
 	}
 	
-	server.listen(QHostAddress::Any, server.port());
+	if (!server.start())
+	{
+		qFatal("Unable to start server\n");
+	}
 	return app.exec();
 }

@@ -1,16 +1,17 @@
 #ifndef _CRYPT_H
 #define _CRYPT_H
 
-#include <QByteArray>
+#include <QtGlobal>
 
-class QPCryptEngine final {
+class QPCryptEngine final
+{
 public:
 	QPCryptEngine();
 	~QPCryptEngine();
-	void encrypt(QByteArray &buf, uint len = 254);
-	void decrypt(QByteArray &buf, uint len = 254);
+	void encrypt(char *buf, quint32 len = 254);
+	void decrypt(char *buf, quint32 len = 254);
 private:
-	int mKey, *mLUT;
+	qint32 mKey, *mLut;
 };
 
 #endif // _CRYPT_H

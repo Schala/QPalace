@@ -4,98 +4,75 @@
 #include <QByteArray>
 #include <QSharedData>
 #include <QSharedDataPointer>
+#include <QtGlobal>
 #include <QVector>
 
-class QPScriptToken: virtual public QObject, virtual public QSharedData {
+class QPScriptToken: virtual public QObject, virtual public QSharedData
+{
 	Q_OBJECT
 public:
 	QPScriptToken(): mOffs(-1) {}
-	
-	inline int offset() const {
-		return mOffs;
-	}
+	inline qint32 offset() const { return mOffs; }
 protected:
-	int mOffs;
+	qint32 mOffs;
 };
 
 typedef QSharedDataPointer<QPScriptToken> QPScriptTokenPtr
 
-class QPScriptTokenList: virtual public QPScriptToken, virtual public QPScriptRunnable {
+class QPScriptTokenList: virtual public QPScriptToken, virtual public QPScriptRunnable
+{
 	Q_OBJECT
 public:
-	QPScriptTokenList(QVector<QPScriptTokenPtr> tlist = QVector<QPScriptTokenPtr>):
+	QPScriptTokenList(QVector<QPScriptTokenPtr> tlist = QVector<QPScriptTokenPtr>()):
 		mOffsetCompensation(0), mRunning(false), mPos(0);
 	QPScriptTokenList(const QPScriptTokenList *other):
 		offsetCompensation(0), mRunning(false), mPos(0), mSrc(other->source()),
 		offset(other->offset);
+	inline bool isRunning() const { return mRunning; }
+	inline void isRunning(bool value) { mRunning = value; }
 	
-	inline bool isRunning() const {
-		return mRunning;
-	};
-	
-	inline void isRunning(bool value) {
-		mRunning = value;
-	};
-	
-	inline void reset() {
+	inline void reset()
+	{
 		mPos = 0;
 		mRunning = true;
-	};
-	
-	inline QPScriptTokenPtr current() const {
-		return mPos < mTList.size() ? mTList[mPos] : nullptr;
-	};
-	
-	QPScriptTokenPtr next() const;
-	
-	inline bool isAvailable() const {
-		return (bool)(mPos < mTList.size());
-	};
-	
-	inline unsigned size() const {
-		return mTList.size();
-	};
-	
-	inline void push(QPScriptTokenPtr t, int offset = -1) {
-		t->mOffs = offset;
-		mTList.push_back(t);
-	};
-	
-	QPScriptTokenPtr pop();
-	
-	void execute(QPScriptContextPtr ctxt);
-	
-	inline void end() {
-		mRunning = false;
-	};
-	
-	inline QByteArray& source() const {
-		return mSrc;
 	}
 	
+	inline QPScriptTokenPtr current() const { return mPos < mTList.size() ? mTList[mPos] : nullptr; }
+	QPScriptTokenPtr next() const;
+	inline bool isAvailable() const { return (bool)(mPos < mTList.size()); }
+	inline quint32 size() const { return mTList.size(); }
+	
+	inline void push(QPScriptTokenPtr t, qint32 offset = -1)
+	{
+		t->mOffs = offset;
+		mTList.push_back(t);
+	}
+	
+	QPScriptTokenPtr pop();
+	void execute(QPScriptContextPtr ctxt);
+	inline void end() { mRunning = false; }
+	inline QByteArray& source() const { return mSrc; }
 	void step();
-	QByteArray& toString();
+	const char* toString();
 protected:
 	bool mRunning;
 	QByteArray mSrc;
-	int mOffsetCompensation;
+	qint32 mOffsetCompensation;
 	QPScriptContextPtr mCtxt;
 private:
 	QVector<QPScriptTokenPtr> mTList;
-	uint mPos;
+	quqint3232 mPos;
 };
 
-class QPScriptTokenStack {
+class QPScriptTokenStack
+{
 public:
-	inline uint size() const {
-		return stack.size();
-	};
-	
+	inline quint32 size() const { return stack.size(); }
 	QPScriptTokenPtr pop();
 	void push(QPScriptTokenPtr t);
-	QPScriptTokenPtr operator[](uint mPos) const;
+	QPScriptTokenPtr operator[](quint32 mPos) const;
 	void copy();
-	QByteArray& popType(const QByteArray &requestedType) const;
+	const char* popType(const char *requestedType) const;
 protected:
 	QVector<QPScriptTokenPtr> mStack;
 };

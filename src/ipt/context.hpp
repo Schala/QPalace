@@ -4,7 +4,8 @@
 #include <QSharedData>
 #include <QSharedDataPointer>
 
-class QPScriptContext final: public QSharedData {
+class QPScriptContext final: public QSharedData
+{
 public:
 	QPScriptManager *manager;
 	bool breakRequested, returnRequested, exitRequested;
@@ -12,14 +13,8 @@ public:
 	
 	QPScriptContext(QPScriptManager *mgr, QPScriptTokenStackPtr stack = nullptr, QPScriptVarCachePtr cache = nullptr):
 		stack(stack), mCache(cache), manager(mgr) {}
-	
-	QPScriptContext(QPScriptContext *other) {
-		QPScriptContext(mgr, stack, mCache);
-	}
-	
-	inline void resetExecControls() {
-		breakRequested = returnRequested = exitRequested = false;
-	};
+	QPScriptContext(QPScriptContext *other) { QPScriptContext(mgr, stack, mCache); }
+	inline void resetExecControls() { breakRequested = returnRequested = exitRequested = false; }
 private:
 	QPScriptVarCachePtr mCache;
 };

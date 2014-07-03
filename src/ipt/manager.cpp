@@ -1,6 +1,7 @@
 #include "manager.hpp"
 
-QPScriptManager::~QPScriptManager() {
+QPScriptManager::~QPScriptManager()
+{
 	for (auto entry: callStack)
 		delete entry;
 	callStack.clear();

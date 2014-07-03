@@ -4,12 +4,14 @@
 #include <QByteArray>
 #include <QQueue>
 #include <QSharedData>
+#include <QtGlobal>
 
-class QPConnection final: public QSharedData {
+class QPConnection final: public QSharedData
+{
 private:
 	QPRoom *mRoom;
 	QQueue<QPMessage*> mMsgQueue;
-	int mID;
+	qint32 mID;
 	QByteArray mUserName;
 	QPRegistration mReg;
 };

@@ -1,10 +1,13 @@
+#include <QByteArray>
 #include <QDataStream>
 #include <QDateTime>
 #include <QRegExp>
+#include <QString>
 #include <QtEndian>
 #include "registration.hpp"
 
-/*static const uint CRCMASK[] = {
+/*static const quint32 crcMask[] =
+{
 	0xebe19b94, 0x7604de74, 0xe3f9d651, 0x604fd612, 0xe8897c2c, 0xadc40920, 0x37ecdfb7, 0x334989ed, 0x2834c33b, 0x8bd2fe15, 0xcbf001a7, 0xbd96b9d6, 0x315e2ce0, 0x4f167884, 0xa489b1b6, 0xa51c7a62,
 	0x54622636, 0xbc016fc, 0x68de2d22, 0x3c9d304c, 0x44fd06fb, 0xbbb3f772, 0xd637e099, 0x849aa9f9, 0x5f240988, 0xf8373bb7, 0x30379087, 0xc7722864, 0xb0a2a643, 0xe3316071, 0x956fed7c, 0x966f937d,
 	0x9945ae16, 0xf0b237ce, 0x223479a0, 0xd8359782, 0x5ae1b89, 0xe3653292, 0xc34eea0d, 0x2691dfc2, 0xe9145f51, 0xd9aa7f35, 0xc7c4344e, 0x4370eba1, 0x1e43833e, 0x634bcf18, 0xc50e26b, 0x6492118,
@@ -25,41 +28,48 @@
 
 static const QByteArray code_asc("ABCDEFGHJKLMNPQRSTUVWXYZ23456789");
 
-/*QPRegistration::QPRegistration() {
-	uint seed = QDateTime::currentDateTime.toTime_t();
-	computeCRC(seed);
-	mCounter = (seed ^ 0x9602c9bf) ^ mCRC;
+/*QPRegistration::QPRegistration()
+{
+	quint32 seed = QDateTime::currentDateTime.toTime_t();
+	computeCrc(seed);
+	mCounter = (seed ^ 0x9602c9bf) ^ mCrc;
 }
 
-void QPRegistration::computeCRC(uint seed) {
-	mCRC = 0xa95ade76;
-	uint current_byte;
+void QPRegistration::computeCrc(quint32 seed)
+{
+	mCrc = 0xa95ade76;
+	quint32 current_byte;
 	seed = qToBigEndian(seed);
 	
-	for (int i = 0; i < 4; i++) {
+	for (quint8 i = 0; i < 4; i++)
+	{
 		current_byte = seed & 0xff;
-		mCRC = ((mCRC << 1) | (((mCRC & 0x80000000) == 0) ? 0 : 1)) ^ CRCMASK[current_byte];
+		mCrc = ((mCrc << 1) | (((mCrc & 0x80000000) == 0) ? 0 : 1)) ^ crcMask[current_byte];
 		seed >>= 8;
 	}
 }*/
 
-QPRegistration::QPRegistration(const QByteArray &regcode) {
+QPRegistration::QPRegistration(const char *regcode)
+{
 	QString code = regcode;
 	QRegExp rx("[^ABCDEFGHJKLMNPQRSTUVWXYZ23456789]");
-	int nbits = 64, sn = 0, ocnt = 0, mask = 0x0080, charidx = 0, pos = 0;
-	uint temp = 0;
+	qint32 nbits = 64, sn = 0, ocnt = 0, mask = 0x0080, charidx = 0, pos = 0;
+	quint32 temp = 0;
 	QByteArray s(8, 0);
 	
 	code = code.toUpper();
 	code.replace(rx, "");
 	
-	while(nbits--) {
-		if (ocnt == 0) {
+	while(nbits--)
+	{
+		if (ocnt == 0)
+		{
 			sn = code_asc.indexOf(code.at(charidx++));
 			ocnt = 5;
 		}
-		if (sn & 0x10) {
-			temp = (uint)(s[pos] & 0xff);
+		if (sn & 0x10)
+		{
+			temp = (quint32)(s[pos] & 0xff);
 			temp |= mask;
 			temp &= 0xff;
 			s[pos] = (uchar)temp;
@@ -69,7 +79,8 @@ QPRegistration::QPRegistration(const QByteArray &regcode) {
 		--ocnt;
 		mask >>= 1;
 		mask &= 0xffff;
-		if (mask == 0) {
+		if (mask == 0)
+		{
 			mask = 0x80;
 			++pos;
 			s[pos] = 0;
@@ -77,38 +88,42 @@ QPRegistration::QPRegistration(const QByteArray &regcode) {
 	}
 	QDataStream sbuf(s);
 	sbuf.device()->reset();
-	sbuf >> mCRC;
-	mCRC = qToBigEndian(mCRC);
+	sbuf >> mCrc;
+	mCrc = qToBigEndian(mCrc);
 	sbuf >> mCounter;
 	mCounter = qToBigEndian(mCounter);
 }
 
-QByteArray QPRegistration::generate() {
+const char* QPRegistration::generate()
+{
 	QByteArray s(15, 0);
 	qsrand(QDateTime::currentDateTime().toTime_t());
 	
-	for (int i = 0; i < 15; i++)
-		switch (i) {
+	for (quint8 i = 0; i < 15; i++)
+		switch (i)
+		{
 			case 4: case 9:
 				s[i] = '-';
 				break;
 			default:
 				s[i] = code_asc[qrand() % code_asc.size()];
 		}
-	return s;
+	return s.data();
 }
 
-/*QByteArray QPRegistration::serverGen() {
+/*const char* QPRegistration::serverGen()
+{
 	QByteArray s(23, 0);
 	qsrand(QDateTime::currentDateTime().toTime_t());
 	
-	for (int i = 0; i < 23; i++)
-		switch (i) {
+	for (quint8 i = 0; i < 23; i++)
+		switch (i)
+		{
 			case 5: case 11: case 17:
 				s[i] = '-';
 				break;
 			default:
 				s[i] = code_asc[qrand() % code_asc.size()];
 		}
-	return s;
+	return s.data();
 }*/

@@ -5,7 +5,7 @@
 TEMPLATE = app
 INCLUDEPATH += .
 QT -= gui
-QMAKE_CXXFLAGS += -std=gnu++11
+CONFIG += c++11
 
 win32 {
 	CONFIG += static

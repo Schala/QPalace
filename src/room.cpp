@@ -1,6 +1,6 @@
 #include "room.hpp"
 
-QPRoom::~QPRoom() {
+/*QPRoom::~QPRoom() {
 	if (!mConnections.empty())
 		mConnections.clear();
 	if (!mHotspots.empty()) {
@@ -18,11 +18,11 @@ QPRoom::~QPRoom() {
 #ifdef SERVER
 #else
 void QPRoom::description(QDataStream &buf) {
-	short namePos, imgNamePos, artistNamePos, pwPos, nSpots, spotPos, nImgs, imgPos,
+	qint16 namePos, imgNamePos, artistNamePos, pwPos, nSpots, spotPos, nImgs, imgPos,
 		nDraws, draw1Pos, nUsers, nLProps, lProp1Pos;
-	ushort len;
+	quint16 len;
 	
-	buf >> flags >> faces_id >> id >> namePos >> imgNamePos >> artistNamePos >> pwPos >>
+	buf >> mFlags >> mFacesId >> mId >> namePos >> imgNamePos >> artistNamePos >> pwPos >>
 		nSpots >> spotPos >> nImgs >> draw1Pos >> nUsers >> nLProps >> lProp1Pos;
 	buf.skipRawData(2); // padding
 	buf >> len;
@@ -30,7 +30,7 @@ void QPRoom::description(QDataStream &buf) {
 	QByteArray ba(len, 0);
 	buf.readRawData(ba.data(), len);
 	QDataStream ds(ba);
-	uchar sLen;
+	quint8 sLen;
 	ds.device()->reset();
 	ds.skipRawData(namePos);
 	
@@ -49,4 +49,4 @@ void QPRoom::description(QDataStream &buf) {
 		ds.readRawData(mArtistName.data(), sLen);
 	}
 }
-#endif // SERVER
+#endif // SERVER*/
