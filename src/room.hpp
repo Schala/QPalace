@@ -2,22 +2,23 @@
 #define _ROOM_H
 
 #include <QByteArray>
-#include <QDataStream>
 #include <QFlags>
 #include <QHash>
 #include <QSet>
-#include <QSharedData>
-#include <QSharedDataPointer>
+#include <QSharedPointer>
 #include <QtGlobal>
 
-/*struct QPPoint final
+#include "message.hpp"
+#include "connection.hpp"
+
+struct QPPoint final
 {
 	qint16 x, y;
 };
 
 class QPHotspot final
 {
-public:
+/*public:
 	enum
 	{
 		Normal = 0,
@@ -66,10 +67,10 @@ private:
 	qint32 mScriptEventMask, mFlags;
 	QPPoint mLoc;
 	qint16 mId, mDest, mType, mState;
-	QHash<qint16, QPPoint> mImgStates; // id, loc
+	QHash<qint16, QPPoint> mImgStates; // id, loc*/
 };
 
-Q_DECLARE_OPERATORS_FOR_FLAGS(QPHotspot::ScriptEvents)
+//Q_DECLARE_OPERATORS_FOR_FLAGS(QPHotspot::ScriptEvents)
 
 struct QPLooseProp final
 {
@@ -77,11 +78,10 @@ struct QPLooseProp final
 	QHash<qint32, qint32> spec; // id, crc
 	qint32 flags, clientArbitrary;
 	QPPoint location;
-}*/
+}
 
-class QPRoom final: virtual public QObject, virtual public QSharedData
+class QPRoom final
 {
-	Q_OBJECT
 public:
 	enum Flag
 	{
@@ -96,13 +96,15 @@ public:
 		DropZone = 0x0100
 	};
 	Q_DECLARE_FLAGS(Flags, Flag)
-/*#ifdef SERVER
-	QPRoom(qint16 id);
-	const char* description() const;
+#ifdef SERVER
+	QPRoom(qint16 id) {};
+	bool load() {return true;};
+	bool save() {return true;};
 #else
-	QPRoom(QDataStream &buf) { description(buf); }
-	void description(QDataStream &buf);
+	QPRoom() {};
 #endif // SERVER
+	QPMessage& description() const;
+	void setDescription(QPMessage &msg);
 	~QPRoom();
 private:
 	QSet<QPConnectionPtr> mConnections;
@@ -111,10 +113,12 @@ private:
 	QSet<QPHotspot*> mHotspots;
 	QHash<qint16, qint16> mImages; // id, alpha
 	QSet<QPLooseProp*> mLProps;
-	QByteArray mName, mImgName, mArtistName, mPwd;*/
+	QByteArray mName, mImgName, mArtistName, mPwd;
 };
 
+typedef QSharedPointer<QPRoom> QPRoomPtr;
+
 Q_DECLARE_OPERATORS_FOR_FLAGS(QPRoom::Flags)
-typedef QSharedDataPointer<QPRoom> QPRoomPtr;
+
 
 #endif // _ROOM_H

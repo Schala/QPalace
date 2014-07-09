@@ -1,8 +1,10 @@
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QStandardPaths>
 #include <QStringList>
 #include <QTextStream>
+#include "../message.hpp"
 #include "server.hpp"
 
 static QString dbPath;
@@ -26,9 +28,12 @@ prop_id INTEGER, x INTEGER, y INTEGER)";
 
 const char propTableDefault[] = "CREATE TABLE prop(id INTEGER PRIMARY KEY, crc INTEGER)";
 
-QPServer::QPServer(QObject *parent): QObject(parent), mServer(new QTcpServer(this))
+QPServer::QPServer(QObject *parent): QObject(parent), mUserCount(0)
 {
 	mDb = QSqlDatabase::addDatabase("QSQLITE");
+	
+	mServer = new QTcpServer(this);
+	connect(mServer, SIGNAL(newConnection()), this, SLOT(handleNewConnection()));
 	
 	QStringList dataloc = QStandardPaths::standardLocations(QStandardPaths::DataLocation);
 	QDir dir = dataloc[0];
@@ -48,6 +53,17 @@ QPServer::QPServer(QObject *parent): QObject(parent), mServer(new QTcpServer(thi
 		
 		QStringList tables = mDb.tables();
 	}
+}
+
+QPServer::~QPServer()
+{
+	if (!mConnections.isEmpty())
+	{
+		for (auto c: mConnections)
+			c.clear();
+		mConnections.clear();
+	}
+	delete mServer;
 }
 
 bool QPServer::loadConf(const QJsonObject &data)
@@ -76,14 +92,14 @@ QSqlError QPServer::genDefaultDb()
 	if (!q.exec(propTableDefault))
 		return mDb.lastError();
 	
-	createRoom(q, 86, "Lobby", QPRoom::Flag::DropZone, "lobby.png");
+	//createRoom(q, 86, "Lobby", QPRoom::Flag::DropZone, "lobby.png");
 	
 	qDebug("`qpserver.db` was not available, so it has been generated.\n");
 	
 	return QSqlError();
 }
 
-QVariant QPServer::createRoom(QSqlQuery &q, qint16 id, const QString &name, QPRoom::Flags flags,
+/*QVariant QPServer::createRoom(QSqlQuery &q, qint16 id, const QString &name, QPRoom::Flags flags,
 	const QString &bg, const QString &pwd, const QString &artist)
 {
 	q.prepare("INSERT INTO room(id, name, flags, img_name, artist_name, password) VALUES(?, ?, ?, ?, ?, ?)");
@@ -97,4 +113,74 @@ QVariant QPServer::createRoom(QSqlQuery &q, qint16 id, const QString &name, QPRo
 	q.exec();
 	
 	return q.lastInsertId();
+}*/
+
+void QPServer::handleNewConnection()
+{
+	QPMessage tiyid(QPMessage::tiyr, ++mUserCount), logon;
+	QPConnection client(mServer->nextPendingConnection());
+	QDataStream ds(client.socket());
+	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+	ds << tiyid;
+	
+	if (!client.socket()->waitForReadyRead())
+		qDebug("Connection from %s timed out.", qPrintable(client.socket()->peerAddress().toString()));
+	if (client.socket()->bytesAvailable() >= 12)
+		ds >> logon;
+		
+	QByteArray lba(logon.data(), logon.size());
+	QDataStream ds1(lba);
+	ds1.device()->reset();
+	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+	
+	quint32 ctr, crc;
+	ds1 >> crc >> ctr;
+	client.setRegistration(QPRegistration(ctr, crc));
+	
+	ds1.skipRawData(1); // discard length, QByteArray will auto determine
+	char *idstr = new char[31];
+	ds1.readRawData(idstr, 31);
+	client.setUserName(QByteArray(idstr));
+	delete[] idstr;
+	
+	ds1.skipRawData(1);
+	idstr = new char[31];
+	ds1.readRawData(idstr, 31);
+	client.setWizardPassword(QByteArray(idstr));
+	delete[] idstr;
+	
+	qint32 flags;
+	ds1 >> flags;
+	client.setAuxFlags(flags);
+	
+	ds1 >> ctr >> crc;
+	client.setPseudoId(QPRegistration(ctr, crc));
+	
+	ds1.skipRawData(12); // demo shit not needed anymore
+	ds1.skipRawData(2); // desired room id, skip until QPRoom is supported
+	
+	idstr = new char[6];
+	ds1.readRawData(idstr, 6);
+	client.setVendor(QPConnection::vendorFromString(idstr));
+	
+	mConnections.insert(QPConnectionPtr(&client));
+	qDebug("[%s] %s logged in from %s using %s client.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
+		client.userName(), qPrintable(client.socket()->peerAddress().toString()), QPConnection::vendorToString(client.vendor()));
+	
+	/*qDebug("ID=%X size=%u ref=%d", logon.id(), logon.size(), logon.ref());
+	quint32 crc, counter, demoelapsed, demolimit, totalelapsed, ulreqprot, ulcaps, dlcaps, d2engcaps, d3engcaps, gfxcaps, pcrc, pctr;
+	char *uname = new char[31], *pwd = new char[31], *sig = new char[6];
+	qint32 flags;
+	qint16 room;
+	quint8 slen;
+	ds1 >> crc >> counter >> slen;
+	ds1.readRawData(uname, 31);
+	ds1 >> slen;
+	ds1.readRawData(pwd, 31);
+	ds1 >> flags >> pctr >> pcrc >> demoelapsed >> totalelapsed >> demolimit >> room;
+	ds1.readRawData(sig, 6);
+	ds1 >> ulreqprot >> ulcaps >> dlcaps >> d2engcaps >> gfxcaps >> d3engcaps;
+	qDebug("CRC=%u\nCounter=%u\nUsername=%s\nWiz pass=%s\nAuxflags=%d\nPUIDctr=%u", crc, counter, uname, pwd, flags, pctr);
+	qDebug("PUIDcrc=%u\ndemo elapse=%u\ntotal elapse=%u\ndemo limit=%u\nroom=%d", pcrc, demoelapsed, totalelapsed, demolimit, room);
+	qDebug("sig=%s\nrequested protocol=%u\nul caps=%u\ndl caps=%u\n2d engine=%u\n2d gfx=%u\n3d engine=%u", sig, ulreqprot, ulcaps, dlcaps, d2engcaps, gfxcaps, d3engcaps);*/
 }

@@ -8,9 +8,10 @@ INCLUDEPATH += .
 QT -= gui
 QT += network sql
 CONFIG += console c++11
+DEFINES += SERVER
 
-HEADERS += server.hpp ../crypt.hpp ../room.hpp
-SOURCES += main.cpp server.cpp ../crypt.cpp ../room.cpp
+HEADERS += ../crypt.hpp ../message.hpp ../connection.hpp server.hpp
+SOURCES += ../crypt.cpp ../message.cpp ../connection.cpp server.cpp main.cpp
 
 win32 {
 	CONFIG += static

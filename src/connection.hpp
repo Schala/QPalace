@@ -2,18 +2,68 @@
 #define _CONNECTION_H
 
 #include <QByteArray>
-#include <QQueue>
-#include <QSharedData>
+//#include <QQueue>
+#include <QSharedPointer>
+#include <QTcpSocket>
 #include <QtGlobal>
 
-class QPConnection final: public QSharedData
+#include "message.hpp"
+#include "client/registration.hpp"
+
+class QPConnection final
 {
+public:
+	enum
+	{
+		UnknownMachine = 0,
+		Win32 = 4,
+		Java,
+		OSMask = 0x0000000f,
+		Authenticate = 0x80000000
+	};
+	enum class Vendor: quint8
+	{
+		Unknown = 0,
+		ThePalace,
+		InstantPalace,
+		Phalanx,
+		LinPal,
+		PalaceChat,
+		OpenPalace,
+		QPalace = 0xff
+	};
+#ifdef SERVER
+	QPConnection(QTcpSocket *sock): mSocket(sock) {}
+	inline Vendor vendor() const { return mVendor; }
+	static Vendor vendorFromString(const char *str);
+	static const char* vendorToString(Vendor vendor);
+	inline void setRegistration(const QPRegistration &reg) { mReg = reg; }
+	inline void setPseudoId(const QPRegistration &uid) { mUid = uid; }
+	inline void setVendor(Vendor v) { mVendor = v; }
+	inline void setWizardPassword(const char *pwd) { if (pwd) mWizardPwd = pwd; }
+	inline void setAuxFlags(qint32 flags) { mAuxFlags = flags; }
+#else
+	QPConnection(QTcpSocket *sock, const char *name, const QPRegistration &reg, AuxFlags auxFlags,
+		const QPRegistration &uid, qint16 initRoom, const char *wizpwd = nullptr);
+#endif // SERVER
+	~QPConnection();
+	inline QTcpSocket* socket() const { return mSocket; }
+	inline qint32 auxFlags() const { return mAuxFlags; }
+	inline QPRegistration registration() const { return mReg; }
+	inline QPRegistration pseudoId() const { return mUid; }
+	inline const char* userName() const { return mUserName.data(); }
+	inline void setUserName(const char *username) { if (username) mUserName = username; }
+	inline const char* wizardPassword() const { return mWizardPwd; }
 private:
-	QPRoom *mRoom;
-	QQueue<QPMessage*> mMsgQueue;
-	qint32 mID;
-	QByteArray mUserName;
-	QPRegistration mReg;
+	//QPRoomPtr mRoom;
+	//QQueue<QPMessage*> mMsgQueue;
+	QByteArray mUserName, mWizardPwd;
+	QPRegistration mReg, mUid;
+	qint32 mAuxFlags;
+	QTcpSocket *mSocket;
+	Vendor mVendor;
 };
+
+typedef QSharedPointer<QPConnection> QPConnectionPtr;
 
 #endif // _CONNECTION_H

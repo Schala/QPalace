@@ -4,8 +4,7 @@
 #include <exception>
 #include <QByteArray>
 #include <QException>
-#include <QSharedData>
-#include <QSharedDataPointer>
+#include <QSharedPointer>
 #include <QStack>
 #include <QtGlobal>
 
@@ -23,7 +22,7 @@ private:
 	std::exception mException;
 };
 
-class QPScriptRunnable: public QSharedData
+class QPScriptRunnable
 {
 public:
 	virtual void execute(QPScriptContextPtr ctxt) = 0;
@@ -33,7 +32,7 @@ public:
 	virtual char* toString() = 0;
 };
 
-typedef QSharedDataPointer<QPScriptRunnable> QPScriptRunnablePtr;
+typedef QSharedPointer<QPScriptRunnable> QPScriptRunnablePtr;
 
 class QPScriptManager
 {

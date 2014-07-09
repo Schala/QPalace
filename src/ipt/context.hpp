@@ -1,10 +1,9 @@
 #ifndef _IPT_CONTEXT_H
 #define _IPT_CONTEXT_H
 
-#include <QSharedData>
-#include <QSharedDataPointer>
+#include <QSharedPointer>
 
-class QPScriptContext final: public QSharedData
+class QPScriptContext final
 {
 public:
 	QPScriptManager *manager;
@@ -19,6 +18,6 @@ private:
 	QPScriptVarCachePtr mCache;
 };
 
-typedef QSharedDataPointer<QPScriptContext> QPScriptContextPtr;
+typedef QSharedPointer<QPScriptContext> QPScriptContextPtr;
 
 #endif // _IPT_CONTEXT_H

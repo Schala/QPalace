@@ -2,12 +2,11 @@
 #define _IPT_TOKEN_H
 
 #include <QByteArray>
-#include <QSharedData>
-#include <QSharedDataPointer>
+#include <QSharedPointer>
 #include <QtGlobal>
 #include <QVector>
 
-class QPScriptToken: virtual public QObject, virtual public QSharedData
+class QPScriptToken: public QObject
 {
 	Q_OBJECT
 public:
@@ -17,9 +16,9 @@ protected:
 	qint32 mOffs;
 };
 
-typedef QSharedDataPointer<QPScriptToken> QPScriptTokenPtr
+typedef QSharedPointer<QPScriptToken> QPScriptTokenPtr
 
-class QPScriptTokenList: virtual public QPScriptToken, virtual public QPScriptRunnable
+class QPScriptTokenList: public QPScriptToken, public QPScriptRunnable
 {
 	Q_OBJECT
 public:
@@ -61,7 +60,7 @@ protected:
 	QPScriptContextPtr mCtxt;
 private:
 	QVector<QPScriptTokenPtr> mTList;
-	quqint3232 mPos;
+	quint32 mPos;
 };
 
 class QPScriptTokenStack

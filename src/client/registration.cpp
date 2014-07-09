@@ -26,7 +26,7 @@
 	0x68cbaab0, 0xbbb5355d, 0x8dda9081, 0xdc2736dc, 0x573355ad, 0xc3ffec65, 0xe97f0270, 0xc6a265e8, 0xd9d49152, 0x4bb35bdb, 0xa1c7bbe6, 0x15a3699a, 0xe69e1eb5, 0x7cdda410, 0x488609df, 0xd19678d3
 };*/
 
-static const QByteArray code_asc("ABCDEFGHJKLMNPQRSTUVWXYZ23456789");
+static const QByteArray codeAsc("ABCDEFGHJKLMNPQRSTUVWXYZ23456789");
 
 /*QPRegistration::QPRegistration()
 {
@@ -64,7 +64,7 @@ QPRegistration::QPRegistration(const char *regcode)
 	{
 		if (ocnt == 0)
 		{
-			sn = code_asc.indexOf(code.at(charidx++));
+			sn = codeAsc.indexOf(code.at(charidx++));
 			ocnt = 5;
 		}
 		if (sn & 0x10)
@@ -72,7 +72,7 @@ QPRegistration::QPRegistration(const char *regcode)
 			temp = (quint32)(s[pos] & 0xff);
 			temp |= mask;
 			temp &= 0xff;
-			s[pos] = (uchar)temp;
+			s[pos] = (quint8)temp;
 		}
 		sn <<= 1;
 		sn &= 0xffff;
@@ -106,7 +106,7 @@ const char* QPRegistration::generate()
 				s[i] = '-';
 				break;
 			default:
-				s[i] = code_asc[qrand() % code_asc.size()];
+				s[i] = codeAsc[qrand() % codeAsc.size()];
 		}
 	return s.data();
 }
@@ -123,7 +123,7 @@ const char* QPRegistration::generate()
 				s[i] = '-';
 				break;
 			default:
-				s[i] = code_asc[qrand() % code_asc.size()];
+				s[i] = codeAsc[qrand() % codeAsc.size()];
 		}
 	return s.data();
 }*/
