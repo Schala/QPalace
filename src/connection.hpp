@@ -24,10 +24,9 @@ public:
 	enum class Vendor: quint8
 	{
 		Unknown = 0,
-		ThePalace,
+		PalaceViewer, // LinPal shares this
 		InstantPalace,
 		Phalanx,
-		LinPal,
 		PalaceChat,
 		OpenPalace,
 		QPalace = 0xff

@@ -1,3 +1,4 @@
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -5,13 +6,15 @@
 #include <QStringList>
 #include <QTextStream>
 #include "../message.hpp"
+#include "../crypt.hpp"
 #include "server.hpp"
 
 static QString dbPath;
+static const QByteArray genPwdAsc("abcdefghijkmnopqrstuvwxyzABCDEFGHIJKLMNPQRSTUVWXYZ23456789");
 
 const char roomTableDefault[] = "CREATE TABLE room(id INTEGER PRIMARY KEY, \
 name VARCHAR, flags INTEGER, faces_id INTEGER, img_name VARCHAR, artist_name VARCHAR, \
-password VARCHAR, hotspots VARCHAR)";
+password_checksum VARCHAR, hotspots VARCHAR)";
 
 const char hotspotTableDefault[] = "CREATE TABLE hotspot(id INTEGER PRIMARY KEY, \
 x INTEGER, y INTEGER, destination INTEGER, type INTEGER, state INTEGER, \
@@ -27,6 +30,15 @@ const char loosePropTableDefault[] = "CREATE TABLE loose_prop(id INTEGER PRIMARY
 prop_id INTEGER, x INTEGER, y INTEGER)";
 
 const char propTableDefault[] = "CREATE TABLE prop(id INTEGER PRIMARY KEY, crc INTEGER)";
+
+const char banlistTableDefault[] = "CREATE TABLE banlist(id INTEGER PRIMARY KEY AUTOINCREMENT, \
+ip_address VARCHAR, expiration VARCHAR)";
+
+const char passwordTableDefault[] = "CREATE TABLE password(id INTEGER PRIMARY KEY AUTOINCREMENT, \
+flags INTEGER, checksum VARCHAR)";
+
+#define PWD_GOD 0x01
+#define PWD_TEMP 0x02
 
 QPServer::QPServer(QObject *parent): QObject(parent), mUserCount(0)
 {
@@ -91,29 +103,68 @@ QSqlError QPServer::genDefaultDb()
 		return mDb.lastError();
 	if (!q.exec(propTableDefault))
 		return mDb.lastError();
+	if (!q.exec(banlistTableDefault))
+		return mDb.lastError();
+	if (!q.exec(passwordTableDefault))
+		return mDb.lastError();
 	
 	//createRoom(q, 86, "Lobby", QPRoom::Flag::DropZone, "lobby.png");
 	
 	qDebug("`qpserver.db` was not available, so it has been generated.\n");
+	genPassword(q, true);
 	
 	return QSqlError();
+}
+
+void QPServer::genPassword(QSqlQuery &q, bool god)
+{
+	char *pwd = new char[8];
+	pwd[7] = '\0';
+	qsrand(QDateTime::currentDateTime().toTime_t());
+	
+	for (quint8 i = 0; i < 7; i++)
+		pwd[i] = genPwdAsc[qrand() % genPwdAsc.size()];
+	
+	createPassword(q, pwd, god ? PWD_GOD | PWD_TEMP : PWD_TEMP);
+	qDebug("Your generated password is '%s' and will be overriden once a new password is set. You are recommended to write this down, as it is unobtainable once this message is cleared!\n", pwd);
 }
 
 /*QVariant QPServer::createRoom(QSqlQuery &q, qint16 id, const QString &name, QPRoom::Flags flags,
 	const QString &bg, const QString &pwd, const QString &artist)
 {
-	q.prepare("INSERT INTO room(id, name, flags, img_name, artist_name, password) VALUES(?, ?, ?, ?, ?, ?)");
+	q.prepare("INSERT INTO room(id, name, flags, img_name, artist_name, password_checksum) VALUES(?, ?, ?, ?, ?, ?)");
 	
 	q.addBindValue(id);
 	q.addBindValue(name);
 	q.addBindValue((qint32)flags);
 	q.addBindValue(bg);
 	q.addBindValue(artist == QString() ? QVariant(QVariant::String) : artist);
-	q.addBindValue(pwd == QString() ? QVariant(QVariant::String) : pwd);
+	if (pwd == QString())
+		q.addBindValue(QVariant(QVariant::String));
+	else
+	{
+		QString pwHash(QCryptographicHash::hash(pwd.toLatin1(), QCryptographicHash::Sha256).toHex());
+		q.addBindValue(pwHash);
+	}
 	q.exec();
-	
 	return q.lastInsertId();
 }*/
+
+QVariant QPServer::createPassword(QSqlQuery &q, const char *pwd, quint8 flags)
+{
+	QByteArray encPwd(pwd);
+	QPCryptEngine crypt;
+	
+	q.prepare("INSERT INTO password(flags, checksum) VALUES(?, ?)");
+	q.addBindValue(flags);
+	
+	crypt.encrypt(encPwd.data(), encPwd.size());
+	QString pwHash(QCryptographicHash::hash(encPwd, QCryptographicHash::Sha256).toHex());
+	q.addBindValue(pwHash);
+	
+	q.exec();
+	return q.lastInsertId();
+}
 
 void QPServer::handleNewConnection()
 {
@@ -162,8 +213,9 @@ void QPServer::handleNewConnection()
 	idstr = new char[6];
 	ds1.readRawData(idstr, 6);
 	client.setVendor(QPConnection::vendorFromString(idstr));
+	delete[] idstr;
 	
-	mConnections.insert(QPConnectionPtr(&client));
+	mConnections.insert(QPConnectionPtr(qMove(&client)));
 	qDebug("[%s] %s logged in from %s using %s client.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
 		client.userName(), qPrintable(client.socket()->peerAddress().toString()), QPConnection::vendorToString(client.vendor()));
 	

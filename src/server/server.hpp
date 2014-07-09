@@ -23,6 +23,7 @@ public:
 	bool loadConf(const QJsonObject &data);
 	/*QVariant createRoom(QSqlQuery &q, qint16 id, const QString &name, QPRoom::Flags flags,
 		const QString &bg, const QString &pwd = QString(), const QString &artist = QString());*/
+	QVariant createPassword(QSqlQuery &q, const char *pwd, quint8 flags = 0);
 	inline quint16 port() const { return mServer->serverPort(); }
 	inline const char* name() const { return mName; }
 	inline bool start() const { return mServer->listen(QHostAddress::Any, mPort); }
@@ -38,6 +39,7 @@ private:
 	qint32 mUserCount; // for ID assignment
 	
 	QSqlError genDefaultDb();
+	void genPassword(QSqlQuery &q, bool god = false);
 };
 
 #endif // _SERVER_H

@@ -30,7 +30,7 @@ QPConnection::Vendor QPConnection::vendorFromString(const char *str)
 	else if (qstrncmp(str, "QtPAL1", 6) == 0)
 		return QPConnection::Vendor::QPalace;
 	else if (qstrncmp(str, "350211", 6) == 0)
-		return QPConnection::Vendor::LinPal;
+		return QPConnection::Vendor::PalaceViewer;
 	else
 		return QPConnection::Vendor::Unknown;
 }
@@ -43,12 +43,10 @@ const char* QPConnection::vendorToString(QPConnection::Vendor vendor)
 			return "PalaceChat";
 		case QPConnection::Vendor::OpenPalace:
 			return "OpenPalace";
-		case QPConnection::Vendor::LinPal:
-			return "LinPal";
+		case QPConnection::Vendor::PalaceViewer:
+			return "ThePalace Viewer";
 		case QPConnection::Vendor::Phalanx:
 			return "Phalanx";
-		case QPConnection::Vendor::ThePalace:
-			return "ThePalace";
 		case QPConnection::Vendor::InstantPalace:
 			return "InstantPalace";
 		case QPConnection::Vendor::QPalace:
