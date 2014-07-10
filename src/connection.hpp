@@ -16,9 +16,29 @@ public:
 	enum
 	{
 		UnknownMachine = 0,
-		Win32 = 4,
+		Mac68k,
+		MacPPC,
+		Win16,
+		Win32,
 		Java,
-		OSMask = 0x0000000f,
+		MacIntel,
+		Win64,
+		Linux32,
+		Linux64,
+		LinuxARM,
+		AndroidARMv5,
+		AndroidARMv7,
+		AndroidIntel,
+		Dalvik,
+		iOS,
+		iOSSim,
+		WinRT,
+		CLR,
+		Python,
+		Ruby,
+		Flash,
+		Web,
+		OSMask = 0x000000ff,
 		Authenticate = 0x80000000
 	};
 	enum class Vendor: quint8

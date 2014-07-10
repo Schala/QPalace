@@ -111,12 +111,12 @@ QSqlError QPServer::genDefaultDb()
 	//createRoom(q, 86, "Lobby", QPRoom::Flag::DropZone, "lobby.png");
 	
 	qDebug("`qpserver.db` was not available, so it has been generated.\n");
-	genPassword(q, true);
+	generatePassword(q, true);
 	
 	return QSqlError();
 }
 
-void QPServer::genPassword(QSqlQuery &q, bool god)
+void QPServer::generatePassword(QSqlQuery &q, bool god)
 {
 	char *pwd = new char[8];
 	pwd[7] = '\0';
@@ -169,14 +169,14 @@ QVariant QPServer::createPassword(QSqlQuery &q, const char *pwd, quint8 flags)
 void QPServer::handleNewConnection()
 {
 	QPMessage tiyid(QPMessage::tiyr, ++mUserCount), logon;
-	QPConnection client(mServer->nextPendingConnection());
-	QDataStream ds(client.socket());
+	QPConnectionPtr client = QPConnectionPtr(new QPConnection(mServer->nextPendingConnection()));
+	QDataStream ds(client->socket());
 	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 	ds << tiyid;
 	
-	if (!client.socket()->waitForReadyRead())
-		qDebug("Connection from %s timed out.", qPrintable(client.socket()->peerAddress().toString()));
-	if (client.socket()->bytesAvailable() >= 12)
+	if (!client->socket()->waitForReadyRead())
+		qDebug("Connection from %s timed out.", qPrintable(client->socket()->peerAddress().toString()));
+	if (client->socket()->bytesAvailable() >= 12)
 		ds >> logon;
 		
 	QByteArray lba(logon.data(), logon.size());
@@ -186,38 +186,38 @@ void QPServer::handleNewConnection()
 	
 	quint32 ctr, crc;
 	ds1 >> crc >> ctr;
-	client.setRegistration(QPRegistration(ctr, crc));
+	client->setRegistration(QPRegistration(ctr, crc));
 	
 	ds1.skipRawData(1); // discard length, QByteArray will auto determine
 	char *idstr = new char[31];
 	ds1.readRawData(idstr, 31);
-	client.setUserName(QByteArray(idstr));
+	client->setUserName(QByteArray(idstr));
 	delete[] idstr;
 	
 	ds1.skipRawData(1);
 	idstr = new char[31];
 	ds1.readRawData(idstr, 31);
-	client.setWizardPassword(QByteArray(idstr));
+	client->setWizardPassword(QByteArray(idstr));
 	delete[] idstr;
 	
 	qint32 flags;
 	ds1 >> flags;
-	client.setAuxFlags(flags);
+	client->setAuxFlags(flags);
 	
 	ds1 >> ctr >> crc;
-	client.setPseudoId(QPRegistration(ctr, crc));
+	client->setPseudoId(QPRegistration(ctr, crc));
 	
 	ds1.skipRawData(12); // demo shit not needed anymore
 	ds1.skipRawData(2); // desired room id, skip until QPRoom is supported
 	
 	idstr = new char[6];
 	ds1.readRawData(idstr, 6);
-	client.setVendor(QPConnection::vendorFromString(idstr));
+	client->setVendor(QPConnection::vendorFromString(idstr));
 	delete[] idstr;
 	
-	mConnections.insert(QPConnectionPtr(qMove(&client)));
+	mConnections.push_back(client);
 	qDebug("[%s] %s logged in from %s using %s client.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
-		client.userName(), qPrintable(client.socket()->peerAddress().toString()), QPConnection::vendorToString(client.vendor()));
+		client->userName(), qPrintable(client->socket()->peerAddress().toString()), QPConnection::vendorToString(client->vendor()));
 	
 	/*qDebug("ID=%X size=%u ref=%d", logon.id(), logon.size(), logon.ref());
 	quint32 crc, counter, demoelapsed, demolimit, totalelapsed, ulreqprot, ulcaps, dlcaps, d2engcaps, d3engcaps, gfxcaps, pcrc, pctr;

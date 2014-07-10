@@ -2,7 +2,6 @@
 #define _SERVER_H
 
 #include <QJsonObject>
-#include <QSet>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -10,6 +9,7 @@
 #include <QTcpServer>
 #include <QtGlobal>
 #include <QVariant>
+#include <QVector>
 
 #include "../connection.hpp"
 //#include "../room.hpp"
@@ -30,8 +30,8 @@ public:
 private slots:
 	void handleNewConnection();
 private:
-//	QSet<QPRoomPtr> mRooms;
-	QSet<QPConnectionPtr> mConnections;
+//	QVector<QPRoomPtr> mRooms;
+	QVector<QPConnectionPtr> mConnections;
 	QSqlDatabase mDb;
 	QTcpServer *mServer;
 	quint16 mPort;
@@ -39,7 +39,7 @@ private:
 	qint32 mUserCount; // for ID assignment
 	
 	QSqlError genDefaultDb();
-	void genPassword(QSqlQuery &q, bool god = false);
+	void generatePassword(QSqlQuery &q, bool god = false);
 };
 
 #endif // _SERVER_H

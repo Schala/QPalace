@@ -24,6 +24,7 @@ LI_AUXFLAGS_CLR | 18 | Common Language Runtime (Mono/.NET)
 LI_AUXFLAGS_Python | 19 | Python
 LI_AUXFLAGS_Ruby | 20 | Ruby
 LI_AUXFLAGS_Flash | 21 | Adobe Flash/Apache Flex
+LI_AUXFLAGS_Web | 22 | web (JavaScript, PHP, etc)
 ### ul2DGraphicsCaps
 ID | Value | Info
 --- | --- | ---
