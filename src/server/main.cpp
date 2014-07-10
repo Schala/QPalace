@@ -15,6 +15,7 @@ void genConfig(QJsonObject &data)
 {
 	data["name"] = "A QPalace Server";
 	data["port"] = 9998;
+	data["allowInsecureClients"] = false;
 }
 
 int main(int argc, char *argv[])
@@ -24,49 +25,41 @@ int main(int argc, char *argv[])
 	app.setApplicationVersion("0.0");
 	app.setOrganizationDomain("https://github.com/Schala/QPalace");
 	
-	QString outMsg;
-	QTextStream ts(&outMsg);
+	QFile confFile(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)+"/qpserver.conf");
 	
 	QCommandLineParser argParser;
 	argParser.addHelpOption();
 	argParser.addVersionOption();
-	ts << "Generate a new `qpserver.conf` in " << QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
-	QCommandLineOption genConfigOption(QStringList() << "conf", outMsg);
-	argParser.addOption(genConfigOption);
 	argParser.process(app);
 	
-	outMsg.clear();
-	ts << QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) << "/qpserver.conf";
-	QString confLoc(outMsg);
-	
-	if (argParser.isSet(genConfigOption))
+	if (!confFile.exists())
 	{
-		QFile genConfFile(confLoc);
-		if (!genConfFile.open(QIODevice::WriteOnly))
+		if (!confFile.open(QIODevice::WriteOnly))
 		{
-			qFatal("Unable to write %s\n", genConfFile.fileName().toLocal8Bit().data());
+			qFatal("Unable to write %s\n", qPrintable(confFile.fileName()));
 			return -1;
 		}
 		QJsonObject genConfData;
 		genConfig(genConfData);
 		QJsonDocument genConfDoc(genConfData);
-		genConfFile.write(genConfDoc.toJson());
+		confFile.write(genConfDoc.toJson());
+		qDebug("New qpserver.conf has been written to %s. The server will now exit.",
+			qPrintable(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)));
 		return 0;
 	}
 	
 	QPServer server;
 	
-	QFile confFile(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)+"/qpserver.conf");
 	if (!confFile.open(QIODevice::ReadOnly))
 	{
-		qFatal("Unable to open %s\n", confFile.fileName().toLocal8Bit().data());
+		qFatal("Unable to open %s\n", qPrintable(confFile.fileName()));
 		return -1;
 	}
 	QByteArray confData = confFile.readAll();
 	QJsonDocument confJson(QJsonDocument::fromJson(confData));
 	if (!server.loadConf(confJson.object()))
 	{
-		qFatal("Unable to write %s\n", confFile.fileName().toLocal8Bit().data());
+		qFatal("Unable to write %s\n", qPrintable(confFile.fileName()));
 		return -1;
 	}
 	

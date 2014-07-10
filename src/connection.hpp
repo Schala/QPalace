@@ -56,6 +56,7 @@ public:
 	inline Vendor vendor() const { return mVendor; }
 	static Vendor vendorFromString(const char *str);
 	static const char* vendorToString(Vendor vendor);
+	bool isSecureVendor() const;
 	inline void setRegistration(const QPRegistration &reg) { mReg = reg; }
 	inline void setPseudoId(const QPRegistration &uid) { mUid = uid; }
 	inline void setVendor(Vendor v) { mVendor = v; }

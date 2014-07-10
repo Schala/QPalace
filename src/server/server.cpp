@@ -80,7 +80,10 @@ QPServer::~QPServer()
 
 bool QPServer::loadConf(const QJsonObject &data)
 {
+	mName = qPrintable(data["name"].toString());
 	mPort = (quint16)data["port"].toInt();
+	if (data["allowInsecureClients"].toBool())
+		mFlags |= AllowInsecureClients;
 	return true;
 }
 
@@ -215,9 +218,18 @@ void QPServer::handleNewConnection()
 	client->setVendor(QPConnection::vendorFromString(idstr));
 	delete[] idstr;
 	
-	mConnections.push_back(client);
-	qDebug("[%s] %s logged in from %s using %s client.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
-		client->userName(), qPrintable(client->socket()->peerAddress().toString()), QPConnection::vendorToString(client->vendor()));
+	if ((mFlags & AllowInsecureClients) || client->isSecureVendor())
+	{
+		mConnections.push_back(client);
+		qDebug("[%s] %s logged in from %s using %s client.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
+			client->userName(), qPrintable(client->socket()->peerAddress().toString()), QPConnection::vendorToString(client->vendor()));
+	}
+	else
+	{
+		qDebug("[%s] %s connection dropped because of use of insecure client: %s.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
+			qPrintable(client->socket()->peerAddress().toString()), QPConnection::vendorToString(client->vendor()));
+		client.clear();
+	}
 	
 	/*qDebug("ID=%X size=%u ref=%d", logon.id(), logon.size(), logon.ref());
 	quint32 crc, counter, demoelapsed, demolimit, totalelapsed, ulreqprot, ulcaps, dlcaps, d2engcaps, d3engcaps, gfxcaps, pcrc, pctr;

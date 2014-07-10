@@ -18,6 +18,10 @@ class QPServer final: public QObject
 {
 	Q_OBJECT
 public:
+	enum
+	{
+		AllowInsecureClients = 0x01
+	};
 	QPServer(QObject *parent = nullptr);
 	~QPServer();
 	bool loadConf(const QJsonObject &data);
@@ -34,9 +38,10 @@ private:
 	QVector<QPConnectionPtr> mConnections;
 	QSqlDatabase mDb;
 	QTcpServer *mServer;
-	quint16 mPort;
 	QByteArray mName;
 	qint32 mUserCount; // for ID assignment
+	quint16 mPort;
+	quint8 mFlags;
 	
 	QSqlError genDefaultDb();
 	void generatePassword(QSqlQuery &q, bool god = false);

@@ -27,10 +27,10 @@ QPConnection::Vendor QPConnection::vendorFromString(const char *str)
 		return QPConnection::Vendor::PalaceChat;
 	else if (qstrncmp(str, "OPNPAL", 6) == 0)
 		return QPConnection::Vendor::OpenPalace;
-	else if (qstrncmp(str, "QtPAL1", 6) == 0)
-		return QPConnection::Vendor::QPalace;
 	else if (qstrncmp(str, "350211", 6) == 0)
 		return QPConnection::Vendor::PalaceViewer;
+	else if (qstrncmp(str, "QtPAL1", 6) == 0)
+		return QPConnection::Vendor::QPalace;
 	else
 		return QPConnection::Vendor::Unknown;
 }
@@ -53,5 +53,18 @@ const char* QPConnection::vendorToString(QPConnection::Vendor vendor)
 			return "QPalace";
 		default:
 			return "unknown";
+	}
+}
+
+bool QPConnection::isSecureVendor() const
+{
+	switch (mVendor)
+	{
+		case QPConnection::Vendor::PalaceChat:
+		case QPConnection::Vendor::OpenPalace:
+		case QPConnection::Vendor::QPalace:
+			return true;
+		default:
+			return false;
 	}
 }
