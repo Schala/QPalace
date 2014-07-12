@@ -15,8 +15,8 @@ QDataStream& operator>>(QDataStream &in, QPMessage &msg)
 	char *buf = new char[size];
 	in.readRawData(buf, size);
 	msg.mData = QByteArray(buf, size);
-#ifndef NDEBUG
+#ifndef QT_NO_DEBUG
 	qDebug("eventType = %x\nlength = %u\nrefNum = %d\n", msg.id(), msg.size(), msg.ref());
-#endif // NDEBUG
+#endif // QT_NO_DEBUG
 	return in;
 }

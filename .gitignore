@@ -5,7 +5,6 @@
 [Dd]ebug/
 [Rr]elease/
 desktop.ini
-gitrev.h
 Makefile*
 moc_*.cpp
 Thumbs.db

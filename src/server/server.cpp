@@ -191,9 +191,9 @@ QVariant QPServer::createPassword(QSqlQuery &q, const char *pwd, quint8 flags)
 
 void QPServer::sendTiyid(QPConnectionPtr cptr)
 {
-#ifndef NDEBUG
+#ifndef QT_NO_DEBUG
 	qDebug("Sending TIYID");
-#endif // NDEBUG
+#endif // QT_NO_DEBUG
 	QPMessage tiyid(QPMessage::tiyr, ++mUserCount);
 	QDataStream ds(cptr->socket());
 	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
@@ -202,9 +202,9 @@ void QPServer::sendTiyid(QPConnectionPtr cptr)
 
 bool QPServer::receiveLogon(QPConnectionPtr cptr)
 {
-#ifndef NDEBUG
+#ifndef QT_NO_DEBUG
 	qDebug("Receiving logon");
-#endif // NDEBUG
+#endif // QT_NO_DEBUG
 	QPMessage logon;
 	QDataStream ds(cptr->socket());
 	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
@@ -219,11 +219,7 @@ bool QPServer::receiveLogon(QPConnectionPtr cptr)
 	ds1.device()->reset();
 	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 	
-	quint32 ctr, crc;
-	ds1 >> crc >> ctr;
-	cptr->setRegistration(QPRegistration(ctr, crc));
-	
-	ds1.skipRawData(1); // discard length, QByteArray will auto determine
+	ds1.skipRawData(9); // 8 bits of legacy data; also discard length byte, QByteArray will auto determine
 	char *idstr = new char[31];
 	ds1.readRawData(idstr, 31);
 	cptr->setUserName(idstr);
@@ -231,17 +227,17 @@ bool QPServer::receiveLogon(QPConnectionPtr cptr)
 	
 	quint8 slen;
 	ds1 >> slen; // encrypted password might have null chars
-#ifndef NDEBUG
+#ifndef QT_NO_DEBUG
 	qDebug("Read password length of %u characters.", slen);
-#endif // NDEBUG
+#endif // QT_NO_DEBUG
 	if (slen)
 	{
 		idstr = new char[slen];
 		ds1.readRawData(idstr, slen);
-#ifndef NDEBUG
+#ifndef QT_NO_DEBUG
 		QPCryptEngine crypt;
 		crypt.decrypt(idstr, slen);
-#endif // NDEBUG
+#endif // QT_NO_DEBUG
 		cptr->setWizardPassword(idstr, slen);
 		delete[] idstr;
 	}
@@ -251,21 +247,18 @@ bool QPServer::receiveLogon(QPConnectionPtr cptr)
 	ds1 >> flags;
 	cptr->setAuxFlags(flags);
 	
-	ds1 >> ctr >> crc; // recycle these two to save memory
-	cptr->setPseudoId(QPRegistration(ctr, crc));
-	
-	ds1.skipRawData(12); // legacy data
+	ds1.skipRawData(20); // legacy data
 	ds1.skipRawData(2); // desired room id, skip until QPRoom is supported
 	
 	idstr = new char[6];
 	ds1.readRawData(idstr, 6);
 	cptr->setVendor(QPConnection::vendorFromString(idstr));
-#ifndef NDEBUG
+#ifndef QT_NO_DEBUG
 	cptr->setRawVendor(idstr);
 	idstr = nullptr;
 #else
 	delete[] idstr;
-#endif // NDEBUG
+#endif // QT_NO_DEBUG
 	
 	ds1.skipRawData(24); // unused data
 	return true;
@@ -273,9 +266,9 @@ bool QPServer::receiveLogon(QPConnectionPtr cptr)
 
 void QPServer::sendVersion(QPConnectionPtr cptr)
 {
-#ifndef NDEBUG
+#ifndef QT_NO_DEBUG
 	qDebug("Sending version");
-#endif // NDEBUG
+#endif // QT_NO_DEBUG
 	QPMessage version(QPMessage::vers, 0x00010016);
 	QDataStream ds(cptr->socket());
 	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
@@ -284,9 +277,9 @@ void QPServer::sendVersion(QPConnectionPtr cptr)
 
 void QPServer::sendInfo(QPConnectionPtr cptr)
 {
-#ifndef NDEBUG
+#ifndef QT_NO_DEBUG
 	qDebug("Sending server info");
-#endif // NDEBUG
+#endif // QT_NO_DEBUG
 	QPMessage sinfo(QPMessage::sinf, mConnections.key(cptr));
 	QByteArray ba;
 	QDataStream ds1(&ba, QIODevice::WriteOnly);
@@ -306,9 +299,9 @@ void QPServer::sendInfo(QPConnectionPtr cptr)
 
 void QPServer::sendUserStatus(QPConnectionPtr cptr)
 {
-#ifndef NDEBUG
+#ifndef QT_NO_DEBUG
 	qDebug("Sending user status");
-#endif // NDEBUG
+#endif // QT_NO_DEBUG
 	QPMessage ustatus(QPMessage::uSta, mConnections.key(cptr));
 	QByteArray ba;
 	QDataStream ds1(&ba, QIODevice::WriteOnly);
@@ -325,9 +318,9 @@ void QPServer::sendUserStatus(QPConnectionPtr cptr)
 
 void QPServer::sendUserLog(QPConnectionPtr cptr)
 {
-#ifndef NDEBUG
+#ifndef QT_NO_DEBUG
 	qDebug("Sending userlog");
-#endif // NDEBUG
+#endif // QT_NO_DEBUG
 	QPMessage ulog(QPMessage::log, mConnections.key(cptr));
 	QByteArray ba;
 	QDataStream ds1(&ba, QIODevice::WriteOnly);
@@ -344,9 +337,9 @@ void QPServer::sendUserLog(QPConnectionPtr cptr)
 
 void QPServer::sendMediaUrl(QPConnectionPtr cptr)
 {
-#ifndef NDEBUG
+#ifndef QT_NO_DEBUG
 	qDebug("Sending HTTP");
-#endif // NDEBUG
+#endif // QT_NO_DEBUG
 	QPMessage http(QPMessage::HTTP, mConnections.key(cptr));
 	QByteArray ba;
 	QDataStream ds1(&ba, QIODevice::WriteOnly);
@@ -376,17 +369,17 @@ void QPServer::handleNewConnection()
 			mConnections[mUserCount] = client;
 			qDebug("[%s] %s logged in from %s using %s client.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
 				client->userName(), qPrintable(client->socket()->peerAddress().toString()), QPConnection::vendorToString(client->vendor()));
-#ifndef NDEBUG
+#ifndef QT_NO_DEBUG
 			qDebug("\n%s", qPrintable(client->debugInfo()));
-#endif // NDEBUG
+#endif // QT_NO_DEBUG
 		}
 		else
 		{
 			qDebug("[%s] %s connection dropped because of use of insecure client: %s.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
 				qPrintable(client->socket()->peerAddress().toString()), QPConnection::vendorToString(client->vendor()));
-#ifndef NDEBUG
+#ifndef QT_NO_DEBUG
 			qDebug("\n%s", qPrintable(client->debugInfo()));
-#endif // NDEBUG
+#endif // QT_NO_DEBUG
 			client.clear();
 			mUserCount--;
 			return;

@@ -6,12 +6,15 @@
 #include <QSharedPointer>
 #include <QTcpSocket>
 #include <QtGlobal>
-#ifndef NDEBUG
+#ifndef QT_NO_DEBUG
 #include <QString>
-#endif // NDEBUG
+#endif // QT_NO_DEBUG
 
 #include "message.hpp"
-#include "registration.hpp"
+
+#ifndef SERVER
+#include "client/registration.hpp"
+#endif // SERVER
 
 class QPConnection final
 {
@@ -73,20 +76,18 @@ public:
 	static Vendor vendorFromString(const char *str);
 	static const char* vendorToString(Vendor vendor);
 	bool isSecureVendor() const;
-	inline void setRegistration(const QPRegistration &reg) { mReg = reg; }
-	inline void setPseudoId(const QPRegistration &uid) { mUid = uid; }
 	inline void setVendor(Vendor v) { mVendor = v; }
 	inline void setWizardPassword(const char *pwd, quint8 l) { if (pwd) mWizardPwd = QByteArray(pwd, l); }
 	inline void setAuxFlags(qint32 flags) { mAuxFlags = flags; }
 #else
 	QPConnection(QTcpSocket *sock, const char *name, const QPRegistration &reg, AuxFlags auxFlags,
 		const QPRegistration &uid, qint16 initRoom, const char *wizpwd = nullptr);
+	inline QPRegistration registration() const { return mReg; }
+	inline QPRegistration pseudoId() const { return mUid; }
 #endif // SERVER
 	~QPConnection();
 	inline QTcpSocket* socket() const { return mSocket; }
 	inline qint32 auxFlags() const { return mAuxFlags; }
-	inline QPRegistration registration() const { return mReg; }
-	inline QPRegistration pseudoId() const { return mUid; }
 	inline const char* userName() const { return mUserName.data(); }
 	inline void setUserName(const char *username) { if (username) mUserName = QByteArray(username); }
 	inline const char* wizardPassword() const { return mWizardPwd; }
@@ -94,20 +95,22 @@ public:
 	inline void setStatus(qint16 flags) { mStatus = flags; }
 private:
 	//QQueue<QPMessage*> mMsgQueue;
+#ifndef SERVER
 	QPRegistration mReg, mUid;
+#endif // SERVER
 	QTcpSocket *mSocket;
 	//QPRoomPtr mRoom;
 	QByteArray mUserName, mWizardPwd;
 	qint32 mAuxFlags;
 	qint16 mStatus;
 	Vendor mVendor;
-#ifndef NDEBUG
+#ifndef QT_NO_DEBUG
 	const char *mRawVendor;
 
 public:
 	QString debugInfo() const;
 	inline void setRawVendor(const char *v) { mRawVendor = v; }
-#endif // NDEBUG
+#endif // QT_NO_DEBUG
 };
 
 typedef QSharedPointer<QPConnection> QPConnectionPtr;

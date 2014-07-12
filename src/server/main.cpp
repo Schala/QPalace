@@ -10,7 +10,6 @@
 #include <QTextStream>
 #include <QtGlobal>
 
-#include "../gitrev.h"
 #include "server.hpp" 
 
 void generateSettings(QJsonObject &data)
@@ -41,7 +40,7 @@ int main(int argc, char *argv[])
 {
 	QCoreApplication app(argc, argv);
 	app.setApplicationName("QPalace Server");
-	app.setApplicationVersion(QString("0.0 - git revision ").append(gitrev));
+	app.setApplicationVersion("0.0");
 	app.setOrganizationDomain("https://github.com/Schala/QPalace");
 	
 	QFile confFile(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)+"/qpserver.conf");

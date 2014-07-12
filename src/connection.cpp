@@ -1,6 +1,6 @@
-#ifndef NDEBUG
+#ifndef QT_NO_DEBUG
 #include <QTextStream>
-#endif // NDEBUG
+#endif // QT_NO_DEBUG
 #include "connection.hpp"
 
 #ifndef SERVER
@@ -72,22 +72,26 @@ bool QPConnection::isSecureVendor() const
 	}
 }
 
-#ifndef NDEBUG
+#ifndef QT_NO_DEBUG
 QString QPConnection::debugInfo() const
 {
 	QString info;
 	QTextStream ts(&info);
-	
+
+#ifndef SERVER
 	ts << "crc = " << mReg.crc() << '\n';
 	ts << "counter = " << mReg.counter() << '\n';
+#endif // SERVER
 	ts << "userName = " << mUserName << '\n';
 	ts << "wizPassword = " << (mWizardPwd.isEmpty() ? "(no password given)" : mWizardPwd) << '\n';
 	ts << "auxFlags = "; hex(ts); ts << mAuxFlags << '\n'; dec(ts);
+#ifndef SERVER
 	ts << "puidCtr = " << mUid.counter() << '\n';
 	ts << "puidCRC = " << mUid.crc() << '\n';
+#endif // SERVER
 	//ts << "desiredRoom = " <<
 	ts << "reserved[6] = " << mRawVendor << '\n';
 	
 	return info;
 }
-#endif // NDEBUG
+#endif // QT_NO_DEBUG
