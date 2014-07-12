@@ -10,10 +10,12 @@ QT += network sql
 CONFIG += console c++11
 DEFINES += SERVER
 
-HEADERS += ../crypt.hpp ../message.hpp ../connection.hpp server.hpp
+HEADERS += ../gitrev.h ../crypt.hpp ../message.hpp ../connection.hpp server.hpp
 SOURCES += ../crypt.cpp ../message.cpp ../connection.cpp server.cpp main.cpp
 
+system(sh ../../gitrev.sh)
+
 win32 {
-	CONFIG += static
+	CONFIG += staticlib
 	QMAKE_CXXFLAGS += -static-libgcc -static-libstdc++ -static
 }

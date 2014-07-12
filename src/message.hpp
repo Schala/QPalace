@@ -50,7 +50,7 @@ public:
 		rAst = 0x72417374,
 		rLst = 0x724c7474,
 		regi = 0x72656769,
-		rep2 = 0x72657032,
+		rep2 = 0x72657032, // unused
 		resp = 0x72657370,
 		rmsg = 0x726d7367,
 		room = 0x726f6f6d,
@@ -87,18 +87,17 @@ public:
 		xwis = 0x78776973
 	};
 	
-	QPMessage(): mId(NOOP), mSize(0), mRef(0), mData(nullptr) {}
-	QPMessage(quint32 id, qint32 ref = 0): mId(id), mSize(0), mRef(ref), mData(nullptr) {}
-	~QPMessage() { if (mData) delete[] mData; }
+	QPMessage(): mId(NOOP), mRef(0) {}
+	QPMessage(quint32 id, qint32 ref = 0): mId(id), mRef(ref) {}
 	inline quint32 id() const { return mId; }
-	inline quint32 size() const { return mSize; }
+	inline quint32 size() const { return (quint32)mData.size(); }
 	inline qint32 ref() const { return mRef; }
 	inline const char* data() const { return mData; }
-	void setData(const char *buf);
+	void setData(const QByteArray &data) { mData = data; }
 private:
-	quint32 mId, mSize;
+	QByteArray mData;
+	quint32 mId;
 	qint32 mRef;
-	char *mData;
 };
 
 QDataStream& operator<<(QDataStream &out, const QPMessage &msg);

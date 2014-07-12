@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <QByteArray>
 #include <QCommandLineParser>
 #include <QCoreApplication>
@@ -9,20 +10,38 @@
 #include <QTextStream>
 #include <QtGlobal>
 
+#include "../gitrev.h"
 #include "server.hpp" 
 
-void genConfig(QJsonObject &data)
+void generateSettings(QJsonObject &data)
 {
 	data["name"] = "A QPalace Server";
 	data["port"] = 9998;
+	data["mediaUrl"] = "http://localhost:80/";
 	data["allowInsecureClients"] = false;
+	data["allowScripts"] = true;
+	data["allowDrawing"] = true;
+	data["allowCustomProps"] = true;
+	data["allowWizards"] = true;
+	data["wizardsMayKick"] = true;
+	data["wizardsMayAuthor"] = true;
+	data["usersMayKick"] = false;
+	data["scriptsMayKick"] = false;
+	data["enforceBans"] = true;
+	data["purgeInactiveProps"] = true;
+	data["antiSpamProtection"] = true;
+	data["disableSpoofing"] = true;
+	data["allowUserCreatedRooms"] = false;
+	data["enforceLogonPassword"] = false;
+	data["logChat"] = true;
+	data["disableWhispering"] = false;
 }
 
 int main(int argc, char *argv[])
 {
 	QCoreApplication app(argc, argv);
 	app.setApplicationName("QPalace Server");
-	app.setApplicationVersion("0.0");
+	app.setApplicationVersion(QString("0.0 - git revision ").append(gitrev));
 	app.setOrganizationDomain("https://github.com/Schala/QPalace");
 	
 	QFile confFile(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)+"/qpserver.conf");
@@ -40,7 +59,7 @@ int main(int argc, char *argv[])
 			return -1;
 		}
 		QJsonObject genConfData;
-		genConfig(genConfData);
+		generateSettings(genConfData);
 		QJsonDocument genConfDoc(genConfData);
 		confFile.write(genConfDoc.toJson());
 		qDebug("New qpserver.conf has been written to %s. The server will now exit.",
@@ -63,9 +82,9 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 	
-	if (!server.start())
+	if (int err = !server.start())
 	{
-		qFatal("Unable to start server\n");
+		qFatal("Unable to start server: error code %d\n", err);
 	}
 	return app.exec();
 }

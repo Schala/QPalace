@@ -1,5 +1,5 @@
 #include <QByteArray>
-#include "../src/client/registration.hpp"
+#include "../src/registration.hpp"
 #include <iostream>
 
 int main(int argc, char *argv[]) {

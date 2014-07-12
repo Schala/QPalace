@@ -6,9 +6,12 @@
 #include <QSharedPointer>
 #include <QTcpSocket>
 #include <QtGlobal>
+#ifndef NDEBUG
+#include <QString>
+#endif // NDEBUG
 
 #include "message.hpp"
-#include "client/registration.hpp"
+#include "registration.hpp"
 
 class QPConnection final
 {
@@ -51,6 +54,19 @@ public:
 		OpenPalace,
 		QPalace = 0xff
 	};
+	enum
+	{
+		SuperUser = 0x0001,
+		God,
+		Kill = 0x0004,
+		CommError = 0x0040,
+		Gag = 0x0080,
+		Pin = 0x0100,
+		Hide = 0x0200,
+		RejectEsp = 0x0400,
+		RejectPrivate = 0x0800,
+		PropGag = 0x1000
+	};
 #ifdef SERVER
 	QPConnection(QTcpSocket *sock): mSocket(sock) {}
 	inline Vendor vendor() const { return mVendor; }
@@ -60,7 +76,7 @@ public:
 	inline void setRegistration(const QPRegistration &reg) { mReg = reg; }
 	inline void setPseudoId(const QPRegistration &uid) { mUid = uid; }
 	inline void setVendor(Vendor v) { mVendor = v; }
-	inline void setWizardPassword(const char *pwd) { if (pwd) mWizardPwd = pwd; }
+	inline void setWizardPassword(const char *pwd, quint8 l) { if (pwd) mWizardPwd = QByteArray(pwd, l); }
 	inline void setAuxFlags(qint32 flags) { mAuxFlags = flags; }
 #else
 	QPConnection(QTcpSocket *sock, const char *name, const QPRegistration &reg, AuxFlags auxFlags,
@@ -72,16 +88,26 @@ public:
 	inline QPRegistration registration() const { return mReg; }
 	inline QPRegistration pseudoId() const { return mUid; }
 	inline const char* userName() const { return mUserName.data(); }
-	inline void setUserName(const char *username) { if (username) mUserName = username; }
+	inline void setUserName(const char *username) { if (username) mUserName = QByteArray(username); }
 	inline const char* wizardPassword() const { return mWizardPwd; }
+	inline qint16 status() const { return mStatus; }
+	inline void setStatus(qint16 flags) { mStatus = flags; }
 private:
-	//QPRoomPtr mRoom;
 	//QQueue<QPMessage*> mMsgQueue;
-	QByteArray mUserName, mWizardPwd;
 	QPRegistration mReg, mUid;
-	qint32 mAuxFlags;
 	QTcpSocket *mSocket;
+	//QPRoomPtr mRoom;
+	QByteArray mUserName, mWizardPwd;
+	qint32 mAuxFlags;
+	qint16 mStatus;
 	Vendor mVendor;
+#ifndef NDEBUG
+	const char *mRawVendor;
+
+public:
+	QString debugInfo() const;
+	inline void setRawVendor(const char *v) { mRawVendor = v; }
+#endif // NDEBUG
 };
 
 typedef QSharedPointer<QPConnection> QPConnectionPtr;

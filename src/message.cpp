@@ -1,24 +1,4 @@
-#include <QByteArray>
 #include "message.hpp"
-
-void QPMessage::setData(const char *buf)
-{
-	if (!buf)
-	{
-		if (mData)
-			delete[] mData;
-		mData = nullptr;
-		mSize = 0;
-	}
-	else
-	{
-		QByteArray ba(buf);
-		if (mData)
-			delete[] mData;
-		mData = ba.data();
-		mSize = ba.size();
-	}
-}
 
 QDataStream& operator<<(QDataStream &out, const QPMessage &msg)
 {
@@ -30,14 +10,13 @@ QDataStream& operator<<(QDataStream &out, const QPMessage &msg)
 
 QDataStream& operator>>(QDataStream &in, QPMessage &msg)
 {
-	in >> msg.mId >> msg.mSize >> msg.mRef;
-	if (msg.data())
-		delete[] msg.mData;
-	msg.mData = nullptr;
-	if (msg.size() != 0)
-	{
-		msg.mData = new char[msg.size()];
-		in.readRawData(msg.mData, msg.size());
-	}
+	quint32 size;
+	in >> msg.mId >> size >> msg.mRef;
+	char *buf = new char[size];
+	in.readRawData(buf, size);
+	msg.mData = QByteArray(buf, size);
+#ifndef NDEBUG
+	qDebug("eventType = %x\nlength = %u\nrefNum = %d\n", msg.id(), msg.size(), msg.ref());
+#endif // NDEBUG
 	return in;
 }

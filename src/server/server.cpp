@@ -10,24 +10,14 @@
 #include "server.hpp"
 
 static QString dbPath;
-static const QByteArray genPwdAsc("abcdefghijkmnopqrstuvwxyzABCDEFGHIJKLMNPQRSTUVWXYZ23456789");
+static const char genPwdAsc[] = "abcdefghijkmnopqrstuvwxyzABCDEFGHIJKLMNPQRSTUVWXYZ23456789";
 
 const char roomTableDefault[] = "CREATE TABLE room(id INTEGER PRIMARY KEY, \
 name VARCHAR, flags INTEGER, faces_id INTEGER, img_name VARCHAR, artist_name VARCHAR, \
-password_checksum VARCHAR, hotspots VARCHAR)";
-
-const char hotspotTableDefault[] = "CREATE TABLE hotspot(id INTEGER PRIMARY KEY, \
-x INTEGER, y INTEGER, destination INTEGER, type INTEGER, state INTEGER, \
-state_ids VARCHAR, script BLOB)";
-
-const char stateTableDefault[] = "CREATE TABLE state(id INTEGER PRIMARY KEY AUTOINCREMENT, \
-img_id INTEGER, img_x INTEGER, img_y INTEGER)";
+password_checksum VARCHAR, hotspots BLOB)";
 
 const char imageTableDefault[] = "CREATE TABLE image(id INTEGER PRIMARY KEY, \
 name VARCHAR, alpha INTEGER)";
-
-const char loosePropTableDefault[] = "CREATE TABLE loose_prop(id INTEGER PRIMARY KEY AUTOINCREMENT, \
-prop_id INTEGER, x INTEGER, y INTEGER)";
 
 const char propTableDefault[] = "CREATE TABLE prop(id INTEGER PRIMARY KEY, crc INTEGER)";
 
@@ -43,7 +33,8 @@ flags INTEGER, checksum VARCHAR)";
 QPServer::QPServer(QObject *parent): QObject(parent), mUserCount(0)
 {
 	mDb = QSqlDatabase::addDatabase("QSQLITE");
-	
+	mOptions = AllowGuests;
+	mAccessFlags = TrackLogoff;
 	mServer = new QTcpServer(this);
 	connect(mServer, SIGNAL(newConnection()), this, SLOT(handleNewConnection()));
 	
@@ -57,7 +48,7 @@ QPServer::QPServer(QObject *parent): QObject(parent), mUserCount(0)
 	QFile dbFile(dbPath);
 	
 	if (!dbFile.exists())
-		genDefaultDb();
+		generateDefaultDb();
 	else
 	{
 		mDb.setDatabaseName(dbPath);
@@ -80,14 +71,48 @@ QPServer::~QPServer()
 
 bool QPServer::loadConf(const QJsonObject &data)
 {
-	mName = qPrintable(data["name"].toString());
+	mName = data["name"].toString().toLatin1();
 	mPort = (quint16)data["port"].toInt();
+	mMediaUrl = data["mediaUrl"].toString();
 	if (data["allowInsecureClients"].toBool())
-		mFlags |= AllowInsecureClients;
+		mOptions |= AllowInsecureClients;
+	if (data["allowScripts"].toBool())
+		mAccessFlags |= AllowCyborgs;
+	if (data["allowDrawing"].toBool())
+		mAccessFlags |= AllowPainting;
+	if (data["allowCustomProps"].toBool())
+		mAccessFlags |= AllowCustomProps;
+	if (data["allowWizards"].toBool())
+		mAccessFlags |= AllowWizards;
+	if (data["wizardsMayKick"].toBool())
+		mAccessFlags |= WizardsMayKill;
+	if (data["wizardsMayAuthor"].toBool())
+		mAccessFlags |= WizardsMayAuthor;
+	if (data["usersMayKick"].toBool())
+		mAccessFlags |= PlayersMayKill;
+	if (data["scriptsMayKick"].toBool())
+		mAccessFlags |= CyborgsMayKill;
+	if (data["enforceBans"].toBool())
+		mAccessFlags |= DeathPenalty;
+	if (data["purgeInactiveProps"].toBool())
+		mAccessFlags |= PurgeInactiveProps;
+	if (data["antiSpamProtection"].toBool())
+		mAccessFlags |= KillFlooders;
+	if (data["disableSpoofing"].toBool())
+		mAccessFlags |= NoSpoofing;
+	if (data["allowUserCreatedRooms"].toBool())
+		mAccessFlags |= UserCreatedRooms;
+	if (data["enforceLogonPassword"].toBool())
+		mOptions |= PasswordSecurity;
+	if (data["logChat"].toBool())
+		mOptions |= ChatLog;
+	if (data["disableWhispering"].toBool())
+		mOptions |= NoWhisper;
+	
 	return true;
 }
 
-QSqlError QPServer::genDefaultDb()
+QSqlError QPServer::generateDefaultDb()
 {
 	mDb.setDatabaseName(dbPath);
 	if (!mDb.open())
@@ -96,13 +121,7 @@ QSqlError QPServer::genDefaultDb()
 	QSqlQuery q;
 	if (!q.exec(roomTableDefault))
 		return mDb.lastError();
-	if (!q.exec(hotspotTableDefault))
-		return mDb.lastError();
-	if (!q.exec(stateTableDefault))
-		return mDb.lastError();
 	if (!q.exec(imageTableDefault))
-		return mDb.lastError();
-	if (!q.exec(loosePropTableDefault))
 		return mDb.lastError();
 	if (!q.exec(propTableDefault))
 		return mDb.lastError();
@@ -126,10 +145,11 @@ void QPServer::generatePassword(QSqlQuery &q, bool god)
 	qsrand(QDateTime::currentDateTime().toTime_t());
 	
 	for (quint8 i = 0; i < 7; i++)
-		pwd[i] = genPwdAsc[qrand() % genPwdAsc.size()];
+		pwd[i] = genPwdAsc[qrand() % qstrlen(genPwdAsc)];
 	
 	createPassword(q, pwd, god ? PWD_GOD | PWD_TEMP : PWD_TEMP);
 	qDebug("Your generated password is '%s' and will be overriden once a new password is set. You are recommended to write this down, as it is unobtainable once this message is cleared!\n", pwd);
+	delete[] pwd;
 }
 
 /*QVariant QPServer::createRoom(QSqlQuery &q, qint16 id, const QString &name, QPRoom::Flags flags,
@@ -169,19 +189,31 @@ QVariant QPServer::createPassword(QSqlQuery &q, const char *pwd, quint8 flags)
 	return q.lastInsertId();
 }
 
-void QPServer::handleNewConnection()
+void QPServer::sendTiyid(QPConnectionPtr cptr)
 {
-	QPMessage tiyid(QPMessage::tiyr, ++mUserCount), logon;
-	QPConnectionPtr client = QPConnectionPtr(new QPConnection(mServer->nextPendingConnection()));
-	QDataStream ds(client->socket());
+#ifndef NDEBUG
+	qDebug("Sending TIYID");
+#endif // NDEBUG
+	QPMessage tiyid(QPMessage::tiyr, ++mUserCount);
+	QDataStream ds(cptr->socket());
 	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 	ds << tiyid;
+}
+
+bool QPServer::receiveLogon(QPConnectionPtr cptr)
+{
+#ifndef NDEBUG
+	qDebug("Receiving logon");
+#endif // NDEBUG
+	QPMessage logon;
+	QDataStream ds(cptr->socket());
+	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 	
-	if (!client->socket()->waitForReadyRead())
-		qDebug("Connection from %s timed out.", qPrintable(client->socket()->peerAddress().toString()));
-	if (client->socket()->bytesAvailable() >= 12)
+	if (cptr->socket()->bytesAvailable() >= 12)
 		ds >> logon;
-		
+	else
+		return false;
+	
 	QByteArray lba(logon.data(), logon.size());
 	QDataStream ds1(lba);
 	ds1.device()->reset();
@@ -189,62 +221,188 @@ void QPServer::handleNewConnection()
 	
 	quint32 ctr, crc;
 	ds1 >> crc >> ctr;
-	client->setRegistration(QPRegistration(ctr, crc));
+	cptr->setRegistration(QPRegistration(ctr, crc));
 	
 	ds1.skipRawData(1); // discard length, QByteArray will auto determine
 	char *idstr = new char[31];
 	ds1.readRawData(idstr, 31);
-	client->setUserName(QByteArray(idstr));
+	cptr->setUserName(idstr);
 	delete[] idstr;
 	
-	ds1.skipRawData(1);
-	idstr = new char[31];
-	ds1.readRawData(idstr, 31);
-	client->setWizardPassword(QByteArray(idstr));
-	delete[] idstr;
+	quint8 slen;
+	ds1 >> slen; // encrypted password might have null chars
+#ifndef NDEBUG
+	qDebug("Read password length of %u characters.", slen);
+#endif // NDEBUG
+	if (slen)
+	{
+		idstr = new char[slen];
+		ds1.readRawData(idstr, slen);
+#ifndef NDEBUG
+		QPCryptEngine crypt;
+		crypt.decrypt(idstr, slen);
+#endif // NDEBUG
+		cptr->setWizardPassword(idstr, slen);
+		delete[] idstr;
+	}
+	ds1.skipRawData(31 - slen);
 	
 	qint32 flags;
 	ds1 >> flags;
-	client->setAuxFlags(flags);
+	cptr->setAuxFlags(flags);
 	
-	ds1 >> ctr >> crc;
-	client->setPseudoId(QPRegistration(ctr, crc));
+	ds1 >> ctr >> crc; // recycle these two to save memory
+	cptr->setPseudoId(QPRegistration(ctr, crc));
 	
-	ds1.skipRawData(12); // demo shit not needed anymore
+	ds1.skipRawData(12); // legacy data
 	ds1.skipRawData(2); // desired room id, skip until QPRoom is supported
 	
 	idstr = new char[6];
 	ds1.readRawData(idstr, 6);
-	client->setVendor(QPConnection::vendorFromString(idstr));
+	cptr->setVendor(QPConnection::vendorFromString(idstr));
+#ifndef NDEBUG
+	cptr->setRawVendor(idstr);
+	idstr = nullptr;
+#else
 	delete[] idstr;
+#endif // NDEBUG
 	
-	if ((mFlags & AllowInsecureClients) || client->isSecureVendor())
-	{
-		mConnections.push_back(client);
-		qDebug("[%s] %s logged in from %s using %s client.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
-			client->userName(), qPrintable(client->socket()->peerAddress().toString()), QPConnection::vendorToString(client->vendor()));
-	}
+	ds1.skipRawData(24); // unused data
+	return true;
+}
+
+void QPServer::sendVersion(QPConnectionPtr cptr)
+{
+#ifndef NDEBUG
+	qDebug("Sending version");
+#endif // NDEBUG
+	QPMessage version(QPMessage::vers, 0x00010016);
+	QDataStream ds(cptr->socket());
+	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+	ds << version;
+}
+
+void QPServer::sendInfo(QPConnectionPtr cptr)
+{
+#ifndef NDEBUG
+	qDebug("Sending server info");
+#endif // NDEBUG
+	QPMessage sinfo(QPMessage::sinf, mConnections.key(cptr));
+	QByteArray ba;
+	QDataStream ds1(&ba, QIODevice::WriteOnly);
+	ds1.device()->reset();
+	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+	
+	quint8 slen = (quint8)qstrlen(mName);
+	ds1 << mAccessFlags << slen;
+	ds1.writeRawData(mName, slen);
+	ds1 << mOptions << mUlCaps << mDlCaps;
+	
+	sinfo.setData(ba);
+	QDataStream ds(cptr->socket());
+	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+	ds << sinfo;
+}
+
+void QPServer::sendUserStatus(QPConnectionPtr cptr)
+{
+#ifndef NDEBUG
+	qDebug("Sending user status");
+#endif // NDEBUG
+	QPMessage ustatus(QPMessage::uSta, mConnections.key(cptr));
+	QByteArray ba;
+	QDataStream ds1(&ba, QIODevice::WriteOnly);
+	ds1.device()->reset();
+	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+	
+	ds1 << cptr->status();
+	
+	ustatus.setData(ba);
+	QDataStream ds(cptr->socket());
+	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+	ds << ustatus;
+}
+
+void QPServer::sendUserLog(QPConnectionPtr cptr)
+{
+#ifndef NDEBUG
+	qDebug("Sending userlog");
+#endif // NDEBUG
+	QPMessage ulog(QPMessage::log, mConnections.key(cptr));
+	QByteArray ba;
+	QDataStream ds1(&ba, QIODevice::WriteOnly);
+	ds1.device()->reset();
+	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+	
+	ds1 << mUserCount;
+	
+	ulog.setData(ba);
+	QDataStream ds(cptr->socket());
+	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+	ds << ulog;
+}
+
+void QPServer::sendMediaUrl(QPConnectionPtr cptr)
+{
+#ifndef NDEBUG
+	qDebug("Sending HTTP");
+#endif // NDEBUG
+	QPMessage http(QPMessage::HTTP, mConnections.key(cptr));
+	QByteArray ba;
+	QDataStream ds1(&ba, QIODevice::WriteOnly);
+	ds1.device()->reset();
+	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+	
+	ds1.writeRawData(mMediaUrl.toString().toLatin1().data(), mMediaUrl.toString().size());
+	ds1 << '\0';
+	
+	http.setData(ba);
+	QDataStream ds(cptr->socket());
+	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+	ds << http;
+}
+
+void QPServer::handleNewConnection()
+{
+	QPConnectionPtr client = QPConnectionPtr(new QPConnection(mServer->nextPendingConnection()));
+	sendTiyid(client);
+	
+	if (!client->socket()->waitForReadyRead())
+		qDebug("Connection from %s timed out.", qPrintable(client->socket()->peerAddress().toString()));
+	
+	if (receiveLogon(client))
+		if ((mOptions & AllowInsecureClients) || client->isSecureVendor())
+		{
+			mConnections[mUserCount] = client;
+			qDebug("[%s] %s logged in from %s using %s client.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
+				client->userName(), qPrintable(client->socket()->peerAddress().toString()), QPConnection::vendorToString(client->vendor()));
+#ifndef NDEBUG
+			qDebug("\n%s", qPrintable(client->debugInfo()));
+#endif // NDEBUG
+		}
+		else
+		{
+			qDebug("[%s] %s connection dropped because of use of insecure client: %s.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
+				qPrintable(client->socket()->peerAddress().toString()), QPConnection::vendorToString(client->vendor()));
+#ifndef NDEBUG
+			qDebug("\n%s", qPrintable(client->debugInfo()));
+#endif // NDEBUG
+			client.clear();
+			mUserCount--;
+			return;
+		}
 	else
 	{
-		qDebug("[%s] %s connection dropped because of use of insecure client: %s.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
-			qPrintable(client->socket()->peerAddress().toString()), QPConnection::vendorToString(client->vendor()));
+		qWarning("[%s] %s connection dropped because of corrupt or incomplete logon data!", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
+			qPrintable(client->socket()->peerAddress().toString()));
 		client.clear();
+		mUserCount--;
+		return;
 	}
 	
-	/*qDebug("ID=%X size=%u ref=%d", logon.id(), logon.size(), logon.ref());
-	quint32 crc, counter, demoelapsed, demolimit, totalelapsed, ulreqprot, ulcaps, dlcaps, d2engcaps, d3engcaps, gfxcaps, pcrc, pctr;
-	char *uname = new char[31], *pwd = new char[31], *sig = new char[6];
-	qint32 flags;
-	qint16 room;
-	quint8 slen;
-	ds1 >> crc >> counter >> slen;
-	ds1.readRawData(uname, 31);
-	ds1 >> slen;
-	ds1.readRawData(pwd, 31);
-	ds1 >> flags >> pctr >> pcrc >> demoelapsed >> totalelapsed >> demolimit >> room;
-	ds1.readRawData(sig, 6);
-	ds1 >> ulreqprot >> ulcaps >> dlcaps >> d2engcaps >> gfxcaps >> d3engcaps;
-	qDebug("CRC=%u\nCounter=%u\nUsername=%s\nWiz pass=%s\nAuxflags=%d\nPUIDctr=%u", crc, counter, uname, pwd, flags, pctr);
-	qDebug("PUIDcrc=%u\ndemo elapse=%u\ntotal elapse=%u\ndemo limit=%u\nroom=%d", pcrc, demoelapsed, totalelapsed, demolimit, room);
-	qDebug("sig=%s\nrequested protocol=%u\nul caps=%u\ndl caps=%u\n2d engine=%u\n2d gfx=%u\n3d engine=%u", sig, ulreqprot, ulcaps, dlcaps, d2engcaps, gfxcaps, d3engcaps);*/
+	sendVersion(client);
+	sendInfo(client);
+	sendUserStatus(client);
+	sendUserLog(client);
+	sendMediaUrl(client);
 }
