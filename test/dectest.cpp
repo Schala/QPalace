@@ -1,13 +1,13 @@
-#include <iostream>
+#include <QtGlobal>
 #include <QByteArray>
 #include "../src/crypt.hpp"
 
 int main() {
-	QByteArray b("\x95\x4f\x95\x43\x0");
+	QByteArray b("\x13bh)\x8DT\x84S");
 	QPCryptEngine enc;
-	enc.decrypt(b, b.size());
-	std::cout << "Decrypted: " << b.data() << std::endl;
-	enc.encrypt(b, b.size());
-	std::cout << "Encrypted: " << b.data() << std::endl;
+	enc.decrypt(b.data(), b.size());
+	qDebug("Decrypted: %s", b.data());
+	enc.encrypt(b.data(), b.size());
+	qDebug("Encrypted: %s", b.data());
 	return 0;
 }

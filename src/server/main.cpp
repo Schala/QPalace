@@ -7,7 +7,6 @@
 #include <QJsonObject>
 #include <QStandardPaths>
 #include <QStringList>
-#include <QTextStream>
 #include <QtGlobal>
 
 #include "server.hpp" 
@@ -66,7 +65,8 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 	
-	QPServer server;
+	QPServer *server = new QPServer();
+	qDebug("Server initialised...");
 	
 	if (!confFile.open(QIODevice::ReadOnly))
 	{
@@ -75,15 +75,18 @@ int main(int argc, char *argv[])
 	}
 	QByteArray confData = confFile.readAll();
 	QJsonDocument confJson(QJsonDocument::fromJson(confData));
-	if (!server.loadConf(confJson.object()))
+	qDebug("Settings file parsed...");
+	confFile.close();
+	if (!server->loadConf(confJson.object()))
 	{
-		qFatal("Unable to write %s\n", qPrintable(confFile.fileName()));
+		qFatal("Unable to load %s\n", qPrintable(confFile.fileName()));
 		return -1;
 	}
+	qDebug("Settings loaded...");
 	
-	if (int err = !server.start())
-	{
-		qFatal("Unable to start server: error code %d\n", err);
-	}
+	if (!server->start())
+		return -1;
+	
+	qDebug("Server is online and listening on port %u", server->port());
 	return app.exec();
 }

@@ -94,6 +94,9 @@ public:
 	inline qint32 ref() const { return mRef; }
 	inline const char* data() const { return mData; }
 	void setData(const QByteArray &data) { mData = data; }
+#ifndef QT_NO_DEBUG
+	void dump() const;
+#endif // QT_NO_DEBUG
 private:
 	QByteArray mData;
 	quint32 mId;

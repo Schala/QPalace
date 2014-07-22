@@ -2,7 +2,6 @@
 #define _CONNECTION_H
 
 #include <QByteArray>
-//#include <QQueue>
 #include <QSharedPointer>
 #include <QTcpSocket>
 #include <QtGlobal>
@@ -11,6 +10,7 @@
 #endif // QT_NO_DEBUG
 
 #include "message.hpp"
+#include "shared.hpp"
 
 #ifndef SERVER
 #include "client/registration.hpp"
@@ -29,12 +29,12 @@ public:
 		Java,
 		MacIntel,
 		Win64,
-		Linux32,
-		Linux64,
+		LinuxX86,
+		LinuxX86_64,
 		LinuxARM,
 		AndroidARMv5,
 		AndroidARMv7,
-		AndroidIntel,
+		AndroidX86,
 		Dalvik,
 		iOS,
 		iOSSim,
@@ -71,7 +71,7 @@ public:
 		PropGag = 0x1000
 	};
 #ifdef SERVER
-	QPConnection(QTcpSocket *sock): mSocket(sock) {}
+	QPConnection(QTcpSocket *sock);
 	inline Vendor vendor() const { return mVendor; }
 	static Vendor vendorFromString(const char *str);
 	static const char* vendorToString(Vendor vendor);
@@ -79,6 +79,9 @@ public:
 	inline void setVendor(Vendor v) { mVendor = v; }
 	inline void setWizardPassword(const char *pwd, quint8 l) { if (pwd) mWizardPwd = QByteArray(pwd, l); }
 	inline void setAuxFlags(qint32 flags) { mAuxFlags = flags; }
+	inline void setRoom(qint16 id) { mRoom = id; }
+	inline void setId(qint32 id) { mId = id; }
+	const char* osToString() const;
 #else
 	QPConnection(QTcpSocket *sock, const char *name, const QPRegistration &reg, AuxFlags auxFlags,
 		const QPRegistration &uid, qint16 initRoom, const char *wizpwd = nullptr);
@@ -93,22 +96,32 @@ public:
 	inline const char* wizardPassword() const { return mWizardPwd; }
 	inline qint16 status() const { return mStatus; }
 	inline void setStatus(qint16 flags) { mStatus = flags; }
+	inline qint16 room() const { return mRoom; }
+	inline qint32 id() const { return mId; }
+	inline qint16 face() const { return mFace; }
+	inline void setFace(qint16 f) { if (f < 16) mFace = f; }
+	inline QPPoint position() const { return mPos; }
+	inline void setPosition(qint16 x, qint16 y) { mPos.x = x; mPos.y = y; }
+	inline QPAssetSpec prop(quint8 i) const { return mProps[i]; }
+	inline void setProp(quint8 i, const QPAssetSpec &p) { mProps[i] = p; }
+	inline qint16 color() const { return mColor; }
+	inline void setColor(qint16 c) { if (c < 16) mColor = c; }
 private:
-	//QQueue<QPMessage*> mMsgQueue;
 #ifndef SERVER
 	QPRegistration mReg, mUid;
 #endif // SERVER
 	QTcpSocket *mSocket;
-	//QPRoomPtr mRoom;
+	QPAssetSpec *mProps;
 	QByteArray mUserName, mWizardPwd;
-	qint32 mAuxFlags;
-	qint16 mStatus;
+	QPPoint mPos;
+	qint32 mAuxFlags, mId;
+	qint16 mStatus, mRoom, mFace, mColor;
 	Vendor mVendor;
 #ifndef QT_NO_DEBUG
 	const char *mRawVendor;
 
 public:
-	QString debugInfo() const;
+	QString loginDebugInfo() const;
 	inline void setRawVendor(const char *v) { mRawVendor = v; }
 #endif // QT_NO_DEBUG
 };

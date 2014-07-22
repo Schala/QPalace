@@ -1,15 +1,15 @@
-#include <iostream>
-#include <QLatin1String>
+#include <QtGlobal>
+#include <QByteArray>
 #include "../src/crypt.hpp"
 
 int main(int argc, char *argv[]) {
 	if (argc > 1) {
-		QLatin1String s(argv[1]);
+		QByteArray s(argv[1]);
 		QPCryptEngine enc;
-		enc.encrypt(s, s.size());
-		std::cout << "Encrypted: " << s.data() << std::endl;
-		enc.decrypt(s, s.size());
-		std::cout << "Decrypted: " << s.data() << std::endl;
+		enc.encrypt(s.data(), s.size());
+		qDebug("Encrypted: %s", s.data());
+		enc.decrypt(s.data(), s.size());
+		qDebug("Decrypted: %s" << s.data());
 	}
 	return 0;
 }

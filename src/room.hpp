@@ -2,33 +2,32 @@
 #define _ROOM_H
 
 #include <QByteArray>
-#include <QFlags>
-#include <QHash>
-#include <QSet>
 #include <QSharedPointer>
 #include <QtGlobal>
+#include <QVector>
+
+#ifndef QT_NO_DEBUG
+#include <QString>
+#endif // QT_NO_DEBUG
+
+#ifdef SERVER
+#include <QJsonObject>
+#include <QSqlQuery>
+#endif // SERVER
 
 #include "message.hpp"
 #include "connection.hpp"
+#include "shared.hpp"
 
-struct QPPoint final
+struct QPSpotState final
 {
-	qint16 x, y;
+	QPPoint location;
+	qint16 imgId;
 };
 
-class QPHotspot final
+struct QPScriptEvent final
 {
-/*public:
 	enum
-	{
-		Normal = 0,
-		Door,
-		ShutableDoor,
-		LockableDoor,
-		Bolt,
-		NavArea
-	};
-	enum ScriptEvent
 	{
 		Select = 0x00000001,
 		Lock = 0x00000002,
@@ -56,34 +55,50 @@ class QPHotspot final
 		Macro8 = 0x00800000,
 		Macro9 = 0x01000000
 	};
-	Q_DECLARE_FLAGS(ScriptEvents, ScriptEvent)
+};
+
+class QPHotspot final
+{
+	friend class QPRoom;
+public:
+	enum
+	{
+		Normal = 0,
+		Door,
+		ShutableDoor,
+		LockableDoor,
+		Bolt,
+		NavArea
+	};
 #ifdef SERVER
-	QPHotspot(qint16 room_id, qint16 id);
+	QPHotspot() {}; // workaround ugly compiler problem
+	QPHotspot(const QJsonObject &data);
 #else
 	QPHotspot(QDataStream &buf);
 #endif // SERVER
 	~QPHotspot();
 private:
+	QVector<qint16> mScriptPtrs, mPointPtrs, mStatePtrs;
 	qint32 mScriptEventMask, mFlags;
 	QPPoint mLoc;
-	qint16 mId, mDest, mType, mState;
-	QHash<qint16, QPPoint> mImgStates; // id, loc*/
+	qint16 mDest, mType, mState, mNamePtr;
 };
-
-//Q_DECLARE_OPERATORS_FOR_FLAGS(QPHotspot::ScriptEvents)
 
 struct QPLooseProp final
 {
-	qint32 link;
-	QHash<qint32, qint32> spec; // id, crc
-	qint32 flags, clientArbitrary;
+	qint32 propId, propCrc, flags, ref;
 	QPPoint location;
-}
+};
+
+struct QPImage final
+{
+	qint16 id, alpha;
+};
 
 class QPRoom final
 {
 public:
-	enum Flag
+	enum
 	{
 		AuthorLocked = 0x0001,
 		Private = 0x0002,
@@ -95,30 +110,37 @@ public:
 		WizardsOnly = 0x0080,
 		DropZone = 0x0100
 	};
-	Q_DECLARE_FLAGS(Flags, Flag)
 #ifdef SERVER
-	QPRoom(qint16 id) {};
-	bool load() {return true;};
+	QPRoom(QSqlQuery &q, qint16 id);
 	bool save() {return true;};
+	QPMessage* description() const;
 #else
 	QPRoom() {};
-#endif // SERVER
-	QPMessage& description() const;
 	void setDescription(QPMessage &msg);
+#endif // SERVER
 	~QPRoom();
+	inline void createHotspot(qint16 id, const QPHotspot &p) { mHotspots[id] = p; }
+	inline void addUser(QPConnectionPtr cptr) { mConnections.append(cptr); }
+	inline qint16 id() const { return mId; }
+	inline qint32 population() const { return mConnections.size(); }
+	inline QPConnectionPtr user(qint32 i) const { return mConnections[i]; }
 private:
-	QSet<QPConnectionPtr> mConnections;
-	qint32 mFlags, mFacesId;
-	qint16 mId;
-	QSet<QPHotspot*> mHotspots;
-	QHash<qint16, qint16> mImages; // id, alpha
-	QSet<QPLooseProp*> mLProps;
+	QVector<QPConnectionPtr> mConnections;
 	QByteArray mName, mImgName, mArtistName, mPwd;
+	qint32 mFlags, mFaces;
+	qint16 mId;
+	QVector<QPHotspot> mHotspots;
+	QVector<QPImage> mImages;
+	QVector<QPLooseProp> mLProps;
+	QVector<QPPoint> mPoints;
+	QVector<QPSpotState> mStates;
+	QVector<QByteArray> mScripts, mImgNames, mSpotNames;
+#ifndef QT_NO_DEBUG
+public:
+	QString descDebugInfo() const;
+#endif // QT_NO_DEBUG
 };
 
 typedef QSharedPointer<QPRoom> QPRoomPtr;
-
-Q_DECLARE_OPERATORS_FOR_FLAGS(QPRoom::Flags)
-
 
 #endif // _ROOM_H

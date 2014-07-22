@@ -9,17 +9,24 @@ QPConnection::QPConnection(QTcpSocket *sock, const char *name, const QPRegistrat
 	mUid(uid), mAuxFlags(auxFlags), mVendor(QPConnection::Vendor::QPalace)
 {
 	mWizardPwd = wizpwd ? wizpwd : QByteArray();
+	
+	mProps = new QPAssetSpec[9];
+	for (quint8 i = 0; i < 9; i++)
+		mProps[i].id = mProps[i].crc = 0;
+}
+#else
+QPConnection::QPConnection(QTcpSocket *sock): mSocket(sock)
+{
+	mProps = new QPAssetSpec[9];
+	
+	for (quint8 i = 0; i < 9; i++)
+		mProps[i].id = mProps[i].crc = 0;
 }
 #endif // SERVER
 
 QPConnection::~QPConnection()
 {
-	/*if (!mMsgQueue.isEmpty())
-	{
-		for (auto m: mMsgQueue)
-			delete m;
-		mMsgQueue.clear();
-	}*/
+	delete[] mProps;
 	mSocket->abort();
 	delete mSocket;
 }
@@ -72,8 +79,57 @@ bool QPConnection::isSecureVendor() const
 	}
 }
 
+const char* QPConnection::osToString() const
+{
+	qint32 flags = mAuxFlags & 0xff;
+	
+	switch (flags)
+	{
+		case Win32:
+			return "Windows (32-bit)";
+		case Java:
+			return "Java";
+		case MacIntel:
+			return "Mac OS X";
+		case Win64:
+			return "Windows (64-bit)";
+		case LinuxX86:
+			return "Linux (x86)";
+		case LinuxX86_64:
+			return "Linux (x86_64)";
+		case LinuxARM:
+			return "Linux (ARM)";
+		case AndroidARMv5:
+			return "Android (ARMv5)";
+		case AndroidARMv7:
+			return "Android (ARMv7)";
+		case AndroidX86:
+			return "Android (x86)";
+		case Dalvik:
+			return "Dalvik";
+		case iOS:
+			return "iOS";
+		case iOSSim:
+			return "iOS Simulator";
+		case WinRT:
+			return "Windows RT";
+		case CLR:
+			return ".NET";
+		case Python:
+			return "Python";
+		case Ruby:
+			return "Ruby";
+		case Flash:
+			return "Flash";
+		case Web:
+			return "the web";
+		default:
+			return "an unknown machine";
+	}
+}
+
 #ifndef QT_NO_DEBUG
-QString QPConnection::debugInfo() const
+QString QPConnection::loginDebugInfo() const
 {
 	QString info;
 	QTextStream ts(&info);
@@ -89,7 +145,7 @@ QString QPConnection::debugInfo() const
 	ts << "puidCtr = " << mUid.counter() << '\n';
 	ts << "puidCRC = " << mUid.crc() << '\n';
 #endif // SERVER
-	//ts << "desiredRoom = " <<
+	ts << "desiredRoom = " << mRoom << '\n';
 	ts << "reserved[6] = " << mRawVendor << '\n';
 	
 	return info;

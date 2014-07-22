@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<!DOCTYPE cross-domain-policy SYSTEM "/xml/dtds/cross-domain-policy.dtd">
+
+<cross-domain-policy> 
+
+   <!-- This is a master socket policy file -->
+   <!-- No other socket policies on the host will be permitted -->
+   <site-control permitted-cross-domain-policies="master-only"/>
+
+   <!-- Instead of setting to-ports="*", administrators can use ranges and commas -->
+   <!-- This will allow access to ports 9000 through 9999 -->
+   <allow-access-from domain="*" to-ports="9000-9999" />
+
+</cross-domain-policy>

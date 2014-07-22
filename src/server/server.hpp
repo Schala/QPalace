@@ -10,11 +10,11 @@
 #include <QString>
 #include <QTcpServer>
 #include <QtGlobal>
-#include <QUrl>
 #include <QVariant>
+#include <QVector>
 
 #include "../connection.hpp"
-//#include "../room.hpp"
+#include "../room.hpp"
 
 class QPServer final: public QObject
 {
@@ -48,7 +48,7 @@ public:
 		TrackLogoff = 0x00000100,
 		JavaSecure = 0x00000200,
 		AllowInsecureClients = 0x00000400,
-		FlashSecure = 0x00000800
+		FlashSecure = 0x00000800 // new addition, but unused due to port limitations
 	};
 	enum
 	{
@@ -66,25 +66,28 @@ public:
 	QPServer(QObject *parent = nullptr);
 	~QPServer();
 	bool loadConf(const QJsonObject &data);
-	/*QVariant createRoom(QSqlQuery &q, qint16 id, const QString &name, QPRoom::Flags flags,
-		const QString &bg, const QString &pwd = QString(), const QString &artist = QString());*/
+	QVariant createRoom(QSqlQuery &q, const QString &name, qint32 flags,
+		const QString &bg, const char *pwd = nullptr, const QString &artist = QString());
 	QVariant createPassword(QSqlQuery &q, const char *pwd, quint8 flags = 0);
 	inline quint16 port() const { return mServer->serverPort(); }
 	inline const char* name() const { return mName; }
-	inline bool start() const { return mServer->listen(QHostAddress::Any, mPort); }
+	bool start();
 private slots:
 	void handleNewConnection();
 private:
-//	QHash<qint16, QPRoomPtr> mRooms;
-	QHash<qint32, QPConnectionPtr> mConnections;
+	QVector<QPRoomPtr> mRooms;
+	QHash<qint16, qint16> mRoomLut;
+	QVector<QPConnectionPtr> mConnections;
 	QSqlDatabase mDb;
-	QUrl mMediaUrl;
 	QTcpServer *mServer;
-	QByteArray mName;
+	QByteArray mName, mMediaUrl;
 	quint32 mOptions, mDlCaps, mUlCaps;
 	qint32 mAccessFlags, mUserCount; // for ID assignment
 	quint16 mPort;
+	qint16 mLastRoomId; // for ID assignment
+	
 	QSqlError generateDefaultDb();
+	bool loadDb();
 	void generatePassword(QSqlQuery &q, bool god = false);
 	void sendTiyid(QPConnectionPtr cptr);
 	bool receiveLogon(QPConnectionPtr cptr);
@@ -93,6 +96,9 @@ private:
 	void sendUserStatus(QPConnectionPtr cptr);
 	void sendUserLog(QPConnectionPtr cptr);
 	void sendMediaUrl(QPConnectionPtr cptr);
+	void sendRoomInfo(QPConnectionPtr cptr, qint16 id);
+	void sendRoomUsers(QPConnectionPtr cptr, qint16 id);
+	void sendNewUser(QPConnectionPtr cptr);
 };
 
 #endif // _SERVER_H

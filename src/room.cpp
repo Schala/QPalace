@@ -1,41 +1,300 @@
 #include <QDataStream>
+#ifndef QT_NO_DEBUG
+#include <QTextStream>
+#endif // QT_NO_DEBUG
+
 #include "room.hpp"
 
-QPRoom::~QPRoom()
+#ifdef SERVER
+
+#include <QJsonArray>
+#include <QSqlRecord>
+
+QPRoom::QPRoom(QSqlQuery &q, qint16 id)
 {
-	if (!mConnections.empty())
-		mConnections.clear();
-	if (!mHotspots.empty())
+	mId = id;
+	if ( id >= 86)
+		id -= 86;
+	if (!q.seek(id))
+		qWarning("Malformed SQL query for room %d record retrieval!", id);
+	else
 	{
-		for (auto hs: mHotspots)
-			delete hs;
-		mHotspots.clear();
-	}
-	if (!mLProps.empty())
-	{
-		for (auto lp: mLProps)
-			delete lp;
-		mLProps.clear();
+		QSqlRecord rec = q.record();
+		mName = rec.value("name").toString().toLatin1();
+		mFlags = (qint32)rec.value("flags").toInt();
+		mFaces = (qint32)rec.value("faces").toInt();
+		mImgName = rec.value("img_name").toString().toLatin1();
+		mArtistName = rec.value("artist_name").toString().toLatin1();
+		mPwd = rec.value("password").toByteArray();
+		
+		QJsonArray hotspots = rec.value("hotspots").toJsonArray();
+		for (qint16 i = 0; i < hotspots.size(); i++)
+		{
+			mHotspots.append(QPHotspot()); // compiler problem workaround
+			mHotspots[i] = QPHotspot(hotspots[i].toObject());
+		}
+		
+		QJsonArray lprops = rec.value("loose_props").toJsonArray();
+		for (qint16 i = 0; i < lprops.size(); i++)
+		{
+			QJsonObject lprop = lprops[i].toObject();
+			mLProps.append(QPLooseProp());
+			mLProps[i].propId = (qint32)lprop["propId"].toInt();
+			mLProps[i].propCrc = (qint32)lprop["propCrc"].toInt();
+			mLProps[i].flags = (qint32)lprop["flags"].toInt();
+			mLProps[i].ref = (qint32)lprop["ref"].toInt();
+			mLProps[i].location.x = (qint16)lprop["x"].toInt();
+			mLProps[i].location.y = (qint16)lprop["y"].toInt();
+		}
+		
+		QJsonArray imgs = rec.value("images").toJsonArray();
+		for (qint16 i = 0; i < imgs.size(); i++)
+		{
+			QJsonObject img = imgs[i].toObject();
+			mImages.append(QPImage());
+			mImages[i].id = (qint16)img["id"].toInt();
+			mImages[i].alpha = (qint16)img["alpha"].toInt();
+		}
+		
+		QJsonArray scripts = rec.value("scripts").toJsonArray();
+		for (qint16 i = 0; i < scripts.size(); i++)
+			mScripts.append(scripts[i].toString().toLatin1());
+		
+		QJsonArray spotNames = rec.value("spot_names").toJsonArray();
+		for (qint16 i = 0; i < spotNames.size(); i++)
+			mSpotNames.append(spotNames[i].toString().toLatin1());
+		
+		QJsonArray points = rec.value("points").toJsonArray();
+		for (qint16 i = 0; i < points.size(); i++)
+		{
+			QJsonObject ploc = points[i].toObject();
+			mPoints.append(QPPoint());
+			mPoints[i].x = (qint16)ploc["x"].toInt();
+			mPoints[i].y = (qint16)ploc["y"].toInt();
+		}
+		
+		QJsonArray states = rec.value("states").toJsonArray();
+		for (qint16 i = 0; i < states.size(); i++)
+		{
+			QJsonObject srec = states[i].toObject();
+			mStates.append(QPSpotState());
+			mStates[i].imgId = (qint16)srec["imgId"].toInt();
+			QJsonObject sloc = srec["location"].toObject();
+			mStates[i].location.x = (qint16)sloc["x"].toInt();
+			mStates[i].location.y = (qint16)sloc["y"].toInt();
+		}
+		
+		QSqlQuery q2;
+		q2.exec("SELECT * FROM image");
+		for (auto i: mImages)
+		{
+			if (!q2.seek(i.id))
+				qWarning("Image ID %d for room %d was not found!", i.id, id);
+			else
+				mImgNames.append(q2.record().value("filename").toString().toLatin1());
+		}
 	}
 }
 
-QPMessage& description() const
+QPHotspot::QPHotspot(const QJsonObject &data)
+{
+	mScriptEventMask = (qint32)data["scriptEventMask"].toInt();
+	mFlags = (qint32)data["flags"].toInt();
+	mType = (qint16)data["type"].toInt();
+	mDest = (qint16)data["destination"].toInt();
+	mState = (qint16)data["state"].toInt();
+	mNamePtr = (qint16)data["nameIndex"].toInt();
+	QJsonObject loc = data["location"].toObject();
+	mLoc.x = (qint16)loc["x"].toInt();
+	mLoc.y = (qint16)loc["y"].toInt();
+	
+	QJsonArray pointIndices = data["pointIndices"].toArray();
+	for (qint16 i = 0; i < pointIndices.size(); i++)
+		mPointPtrs.append((qint16)pointIndices[i].toInt());
+	
+	QJsonArray scriptIndices = data["scriptIndices"].toArray();
+	for (qint16 i = 0; i < scriptIndices.size(); i++)
+		mScriptPtrs.append((qint16)scriptIndices[i].toInt());
+	
+	QJsonArray stateIndices = data["stateIndices"].toArray();
+	for (qint16 i = 0; i < stateIndices.size(); i++)
+		mStatePtrs.append((qint16)stateIndices[i].toInt());
+}
+
+QPMessage* QPRoom::description() const
 {
 	QByteArray ba;
-	QDataStream ds(ba);
-	qint16 imgNamePos = 3 + mName.size();
-	qint16 artistNamePos = imgNamePos + 1 + mImgName.size();
-	qint16 pwPos, nSpots, spotPos, nImgs, imgPos nDraws, draw1Pos, nUsers, nLProps, lProp1Pos;
-	
+	QDataStream ds(&ba, QIODevice::WriteOnly);
 	ds.device()->reset();
-	ds << mFlags << mFacesId << mId << (qint16)2 << imgNamePos << artistNamePos << pwPos <<
-		(qint16)mHotspots.size(); << spotPos << nImgs << draw1Pos << (qint16)mConnections.size() <<
-		(qint16)mLProps.size() << lProp1Pos;
+	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 	
-	QPMessage msg(QPMessage::Id::room);
-	msg.setData(ba.data());
+	qint16 lpropArraySize = mLProps.size()*24;
+	qint16 imgArraySize = mImages.size()*12;
+	qint16 spotArraySize = mHotspots.size()*48;
+	qint16 pointArraySize = mPoints.size()*4;
+	qint16 stateArraySize = mStates.size()*6;
+	
+	qint16 scriptArraySize = 0;
+	for (qint16 i = 0; i < mScripts.size(); i++)
+		scriptArraySize += mScripts[i].size()+1;
+	
+	qint16 imgNamesArraySize = 0;
+	for (qint16 i = 0; i < mImgNames.size(); i++)
+		imgNamesArraySize += mImgNames.size()+1;
+	
+	qint16 spotNamesArraySize = 0;
+	for (qint16 i = 0; i < mSpotNames.size(); i++)
+		spotNamesArraySize += mSpotNames.size()+1;
+	
+	qint16 pos = 2;
+	
+	qint16 namePos = (bool)mName.size() ? pos : 0; // isEmpty() gives 'const bool' error *bool*shit
+	pos += namePos ? mName.size()+1 : 0;
+	qint16 imgNamePos = (bool)mImgName.size() ? pos : 0;
+	pos += imgNamePos ? mImgName.size()+1 : 0;
+	qint16 artistNamePos = (bool)mArtistName.size() ? pos : 0;
+	pos += artistNamePos ? mArtistName.size()+1 : 0;
+	qint16 pwPos = (bool)mPwd.size() ? pos : 0;
+	pos += pwPos ? mPwd.size()+1 : 0;
+	qint16 imgNamesPos = (bool)mImgNames.size() ? pos : 0;
+	pos += imgNamesPos ? imgNamesArraySize : 0;
+	qint16 spotNamePos = (bool)mSpotNames.size() ? pos : 0;
+	pos += spotNamePos ? spotNamesArraySize : 0;
+	qint16 statePos = (bool)mStates.size() ? pos : 0;
+	pos += statePos ? stateArraySize : 0;
+	qint16 pointPos = (bool)mPoints.size() ? pos : 0;
+	pos += pointPos ? pointArraySize : 0;
+	qint16 scriptPos = (bool)mScripts.size() ? pos : 0;
+	pos += scriptPos ? scriptArraySize : 0;
+	qint16 imgPos = (bool)mImages.size() ? pos : 0;
+	pos += imgPos ? imgArraySize : 0;
+	qint16 spotPos = (bool)mHotspots.size() ? pos : 0;
+	pos += spotPos ? spotArraySize : 0;
+	qint16 draw1Pos = 0;
+	qint16 lProp1Pos = 0;
+	
+	ds << mFlags << mFaces << mId << namePos << imgNamePos << artistNamePos << pwPos <<
+		(qint16)mHotspots.size() << spotPos << (qint16)mImages.size() << imgPos << (qint16)0 << draw1Pos <<
+		(qint16)mConnections.size() << (qint16)mLProps.size() << lProp1Pos << (quint16)0;
+	
+	QByteArray buf;
+	QDataStream ds2(&buf, QIODevice::WriteOnly);
+	ds2.device()->reset();
+	ds2.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+	ds2 << (quint16)0;
+	
+	qint16 *imgNamePtrs = new qint16[mImgNames.size()];
+	qint16 *spotNamePtrs = new qint16[mSpotNames.size()];
+	qint16 *statePtrs = new qint16[mStates.size()];
+	qint16 *pointPtrs = new qint16[mPoints.size()];
+	qint16 *scriptTextPtrs = new qint16[mScripts.size()];
+	
+	if (namePos)
+	{
+		ds2 << (quint8)mName.size();
+		ds2.writeRawData(mName.data(), mName.size());
+	}
+	
+	if (imgNamePos)
+	{
+		ds2 << (quint8)mImgName.size();
+		ds2.writeRawData(mImgName.data(), mImgName.size());
+	}
+	
+	if (artistNamePos)
+	{
+		ds2 << (quint8)mArtistName.size();
+		ds2.writeRawData(mArtistName.data(), mArtistName.size());
+	}
+	
+	if (pwPos)
+	{
+		ds2 << (quint8)mPwd.size();
+		ds2.writeRawData(mPwd.data(), mPwd.size());
+	}
+	
+	if (imgNamesPos)
+	{
+		for (qint16 i = 0; i < mImgNames.size(); i++)
+		{
+			imgNamePtrs[i] = (qint16)ds2.device()->pos();
+			ds2 << (quint8)mImgNames[i].size();
+			ds2.writeRawData(mImgNames[i].data(), mImgNames[i].size());
+		}
+	}
+	
+	if (spotNamePos)
+	{
+		for (qint16 i = 0; i < mSpotNames.size(); i++)
+		{
+			spotNamePtrs[i] = (qint16)ds2.device()->pos();
+			ds2 << (quint8)mSpotNames[i].size();
+			ds2.writeRawData(mSpotNames[i].data(), mSpotNames[i].size());
+		}
+	}
+	
+	if (statePos)
+	{
+		for (qint16 i = 0; i < mStates.size(); i++)
+		{
+			statePtrs[i] = (qint16)ds2.device()->pos();
+			ds2 << mStates[i].imgId << mStates[i].location.x << mStates[i].location.y;
+		}
+	}
+	
+	if (pointPos)
+	{
+		for (qint16 i = 0; i < mPoints.size(); i++)
+		{
+			pointPtrs[i] = (qint16)ds2.device()->pos();
+			ds2 << mPoints[i].x << mPoints[i].y;
+		}
+	}
+	
+	if (scriptPos)
+	{
+		for (qint16 i = 0; i < mScripts.size(); i++)
+		{
+			scriptTextPtrs[i] = (qint16)ds2.device()->pos();
+			ds2.writeRawData(mScripts[i].data(), mScripts[i].size());
+			ds2 << (quint8)0;
+		}
+	}
+	
+	if (imgPos)
+		for (qint16 i = 0; i < mImages.size(); i++)
+			ds2 << (qint32)0 << mImages[i].id << imgNamePtrs[i] << mImages[i].alpha << (qint16)0;
+	
+	if (spotPos)
+	{
+		qint16 j = pointPtrs[0], k = statePtrs[0], l = scriptTextPtrs[0];
+		for (qint16 i = 0; i < mHotspots.size(); i++)
+		{
+			if (i > pointPtrs[0]) j += (qint16)mHotspots[i].mPointPtrs.size();
+			if (i > statePtrs[0]) k += (qint16)mHotspots[i].mStatePtrs.size();
+			if (i > scriptTextPtrs[0]) l += (qint16)mHotspots[i].mScriptPtrs.size();
+			
+			ds2 << mHotspots[i].mScriptEventMask << mHotspots[i].mFlags << (qint64)0 << mHotspots[i].mLoc.x <<
+				mHotspots[i].mLoc.y << i << mHotspots[i].mDest << (qint16)mHotspots[i].mPointPtrs.size() << j <<
+				mHotspots[i].mType << (qint16)0 << (qint16)mHotspots[i].mScriptPtrs.size() << (qint16)0 <<
+				mHotspots[i].mState << (qint16)mHotspots[i].mStatePtrs.size() << k << spotNamePtrs[mHotspots[i].mNamePtr] <<
+				l << (qint16)0;
+		}
+	}
+	
+	ds << (quint16)buf.size();
+	ba += buf;
+	QPMessage *msg = new QPMessage(QPMessage::room);
+	msg->setData(ba);
+	delete[] imgNamePtrs;
+	delete[] statePtrs;
+	delete[] pointPtrs;
+	delete[] scriptTextPtrs;
+	delete[] spotNamePtrs;
 	return msg;
 }
+
+#else
 
 void QPRoom::setDescription(QPMessage &msg)
 {
@@ -75,3 +334,56 @@ void QPRoom::setDescription(QPMessage &msg)
 		ds.readRawData(mArtistName.data(), sLen);
 	}
 }
+
+#endif // SERVER
+
+QPRoom::~QPRoom()
+{
+	if (!mConnections.empty())
+		mConnections.clear();
+	if (!mHotspots.empty())
+		mHotspots.clear();
+	if (!mImages.empty())
+		mImages.clear();
+	if (!mLProps.empty())
+		mLProps.clear();
+	if (!mPoints.empty())
+		mPoints.clear();
+	if (!mStates.empty())
+		mStates.clear();
+	if (!mScripts.empty())
+		mScripts.clear();
+	if (!mImgNames.empty())
+		mImgNames.clear();
+	if (!mSpotNames.empty())
+		mSpotNames.clear();
+}
+
+QPHotspot::~QPHotspot()
+{
+	if (!mPointPtrs.empty())
+		mPointPtrs.clear();
+	if (!mStatePtrs.empty())
+		mStatePtrs.clear();
+	if (!mScriptPtrs.empty())
+		mScriptPtrs.clear();
+}
+
+#ifndef QT_NO_DEBUG
+QString QPRoom::descDebugInfo() const
+{
+	QString info;
+	QTextStream ts(&info);
+	
+	ts << "roomFlags = "; hex(ts); ts << mFlags << '\n'; dec(ts);
+	ts << "facesID = " << mFaces << '\n';
+	ts << "roomID = " << mId << '\n';
+	ts << "nbrHotspots = " << mHotspots.size() << '\n';
+	ts << "nbrPictures = " << mImages.size() << '\n';
+	//ts << "nbrDrawCmds = " << mDraws.size() << '\n';
+	ts << "nbrPeople = " << population() << '\n';
+	ts << "nbrLProps = " << mLProps.size() << '\n';
+	
+	return info;
+}
+#endif // QT_NO_DEBUG
