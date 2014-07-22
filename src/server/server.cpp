@@ -105,7 +105,7 @@ bool QPServer::loadConf(const QJsonObject &data)
 	mPort = (quint16)data["port"].toInt();
 	mMediaUrl = data["mediaUrl"].toString().toLatin1();
 	if (data["allowInsecureClients"].toBool())
-		mOptions |= AllowInsecureClients;
+		mAccessFlags |= AllowInsecureClients;
 	if (data["allowScripts"].toBool())
 		mAccessFlags |= AllowCyborgs;
 	if (data["allowDrawing"].toBool())
