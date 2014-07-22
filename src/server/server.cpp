@@ -529,7 +529,7 @@ void QPServer::handleNewConnection()
 		qDebug("Connection from %s timed out.", qPrintable(client->socket()->peerAddress().toString()));
 	
 	if (receiveLogon(client))
-		if ((mOptions & AllowInsecureClients) || client->isSecureVendor())
+		if ((mAccessFlags & AllowInsecureClients) || client->isSecureVendor())
 		{
 			mConnections.push_back(client);
 			qDebug("[%s] %s logged in from %s using %s client on %s.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
