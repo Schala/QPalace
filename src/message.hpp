@@ -82,7 +82,7 @@ public:
 		vers = 0x76657273,
 		whis = 0x77686973,
 		wmsg = 0x776d7367, // ?
-		wprs = 0x77707273,
+		wprs = 0x77707273, // ?
 		xtlk = 0x78746c6b,
 		xwis = 0x78776973
 	};

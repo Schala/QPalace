@@ -121,12 +121,12 @@ QPHotspot::QPHotspot(const QJsonObject &data)
 		mStatePtrs.append((qint16)stateIndices[i].toInt());
 }
 
-QPMessage* QPRoom::description() const
+void QPRoom::description(QPConnection *c, bool revised) const
 {
 	QByteArray ba;
-	QDataStream ds(&ba, QIODevice::WriteOnly);
-	ds.device()->reset();
-	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+	QDataStream ds1(&ba, QIODevice::WriteOnly);
+	ds1.device()->reset();
+	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 	
 	qint16 lpropArraySize = mLProps.size()*24;
 	qint16 imgArraySize = mImages.size()*12;
@@ -173,7 +173,7 @@ QPMessage* QPRoom::description() const
 	qint16 draw1Pos = 0;
 	qint16 lProp1Pos = 0;
 	
-	ds << mFlags << mFaces << mId << namePos << imgNamePos << artistNamePos << pwPos <<
+	ds1 << mFlags << mFaces << mId << namePos << imgNamePos << artistNamePos << pwPos <<
 		(qint16)mHotspots.size() << spotPos << (qint16)mImages.size() << imgPos << (qint16)0 << draw1Pos <<
 		(qint16)mConnections.size() << (qint16)mLProps.size() << lProp1Pos << (quint16)0;
 	
@@ -282,21 +282,62 @@ QPMessage* QPRoom::description() const
 		}
 	}
 	
-	ds << (quint16)buf.size();
+	ds1 << (quint16)buf.size();
 	ba += buf;
-	QPMessage *msg = new QPMessage(QPMessage::room);
-	msg->setData(ba);
+	QPMessage msg = revised ? QPMessage(QPMessage::sRom) : QPMessage(QPMessage::room);
+	msg.setData(ba);
+	QDataStream ds(c->socket());
+	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+	ds << msg;
 	delete[] imgNamePtrs;
 	delete[] statePtrs;
 	delete[] pointPtrs;
 	delete[] scriptTextPtrs;
 	delete[] spotNamePtrs;
-	return msg;
+}
+
+void QPRoom::users(QPConnection *c) const
+{
+	QByteArray ba;
+	QDataStream ds1(&ba, QIODevice::WriteOnly);
+	ds1.device()->reset();
+	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+	for (qint32 i = 0; i < population(); i++)
+	{
+		ds1 << user(i)->id();
+		ds1 << user(i)->position().x << user(i)->position().y;
+		for (quint8 j = 0; j < 9; j++)
+			ds1 << user(i)->prop(j).id << user(i)->prop(j).crc;
+		ds1 << user(i)->room();
+		ds1 << user(i)->face();
+		ds1 << user(i)->color();
+		ds1 << (qint32)0; // not used
+
+		qint16 activeProps = 0;
+		for (quint8 j = 0; j < 9; j++)
+			if (user(i)->prop(j).id && user(i)->prop(j).crc)
+				activeProps++;
+		ds1 << activeProps;
+
+		quint8 nlen = qstrlen(user(i)->userName());
+		ds1 << nlen;
+		ds1.writeRawData(user(i)->userName(), nlen);
+		for (quint8 j = 0; j < (31 - nlen); j++)
+			ds1 << (quint8)0;
+	}
+
+	QPMessage rprs(QPMessage::rprs, population());
+	QPMessage endr(QPMessage::endr);
+	rprs.setData(ba);
+	QDataStream ds(c->socket());
+	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+	ds << rprs << endr;
 }
 
 #else
 
-void QPRoom::setDescription(QPMessage &msg)
+void QPRoom::description(QPMessage &msg)
 {
 	QDataStream buf(QByteArray(msg.data());
 	qint16 namePos, imgNamePos, artistNamePos, pwPos, nSpots, spotPos, nImgs, imgPos,
@@ -369,21 +410,89 @@ QPHotspot::~QPHotspot()
 		mScriptPtrs.clear();
 }
 
-#ifndef QT_NO_DEBUG
-QString QPRoom::descDebugInfo() const
+void QPRoom::handleUserJoined(const QPRoom *r, QPConnection *c)
 {
-	QString info;
-	QTextStream ts(&info);
-	
-	ts << "roomFlags = "; hex(ts); ts << mFlags << '\n'; dec(ts);
-	ts << "facesID = " << mFaces << '\n';
-	ts << "roomID = " << mId << '\n';
-	ts << "nbrHotspots = " << mHotspots.size() << '\n';
-	ts << "nbrPictures = " << mImages.size() << '\n';
-	//ts << "nbrDrawCmds = " << mDraws.size() << '\n';
-	ts << "nbrPeople = " << population() << '\n';
-	ts << "nbrLProps = " << mLProps.size() << '\n';
-	
-	return info;
+	if (this == r)
+	{
+		mConnections.append(c);
+
+		QPMessage nprs(QPMessage::nprs, c->id());
+		QByteArray ba;
+		QDataStream ds1(&ba, QIODevice::WriteOnly);
+		ds1.device()->reset();
+		ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+		ds1 << c->id();
+		ds1 << c->position().x << c->position().y;
+		for (quint8 j = 0; j < 9; j++)
+			ds1 << c->prop(j).id << c->prop(j).crc;
+		ds1 << c->room();
+		ds1 << c->face();
+		ds1 << c->color();
+		ds1 << (qint32)0; // not used
+
+		qint16 activeProps = 0;
+		for (quint8 j = 0; j < 9; j++)
+			if (c->prop(j).id && c->prop(j).crc)
+				activeProps++;
+		ds1 << activeProps;
+
+		quint8 nlen = qstrlen(c->userName());
+		ds1 << nlen;
+		ds1.writeRawData(c->userName(), nlen);
+		for (quint8 j = 0; j < (31 - nlen); j++)
+			ds1 << (quint8)0;
+
+		nprs.setData(ba);
+
+		for (auto p: mConnections)
+		{
+			QDataStream ds(p->socket());
+			ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+			ds << nprs;
+
+			if (p != c)
+				description(p, true);
+		}
+	}
 }
-#endif // QT_NO_DEBUG
+
+void QPRoom::handleUserLeft(const QPRoom *r, QPConnection *c)
+{
+	if (this == r)
+	{
+		mConnections.remove(mConnections.indexOf(c));
+		QPMessage eprs(QPMessage::eprs, c->id());
+
+		for (auto p: mConnections)
+		{
+			QDataStream ds(p->socket());
+			ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+			ds << eprs;
+			description(p, true);
+		}
+	}
+}
+
+void QPRoom::handleUserMoved(const QPRoom *r, const QPConnection *c)
+{
+	if (this == r)
+	{
+		QPMessage umove(QPMessage::uLoc, c->id());
+		QByteArray ba;
+		QDataStream ds1(&ba, QIODevice::WriteOnly);
+		ds1.device()->reset();
+		ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+		ds1 << c->position().x << c->position().y;
+
+		umove.setData(ba);
+
+		for (auto p: mConnections)
+		{
+			QDataStream ds(p->socket());
+			ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+			ds << umove;
+		}
+	}
+}

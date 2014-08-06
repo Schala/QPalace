@@ -20,7 +20,6 @@
 class QPServer final: public QObject
 {
 	Q_OBJECT
-	friend class QPMessageHandler;
 public:
 	enum
 	{
@@ -74,11 +73,19 @@ public:
 	inline quint16 port() const { return mServer->serverPort(); }
 	inline const char* name() const { return mName; }
 	bool start();
+signals:
+	void roomEdited(const QPRoom *r);
+	void userJoinedRoom(const QPRoom *r, QPConnection *c);
+	void userLeftRoom(const QPRoom *r, QPConnection *c);
+	void userLoggedOn(const QPConnection *c);
+	void userLoggedOff(const QPConnection *c);
+	void userMoved(const QPRoom *r, const QPConnection *c);
 private slots:
 	void handleNewConnection();
 	void handleReadyRead();
 private:
 	QVector<QPRoom*> mRooms;
+	QHash<qint32, qint32> mUserLut;
 	QHash<qint16, qint16> mRoomLut;
 	QVector<QPConnection*> mConnections;
 	QSqlDatabase mDb;
@@ -92,16 +99,14 @@ private:
 	QSqlError generateDefaultDb();
 	bool loadDb();
 	void generatePassword(QSqlQuery &q, bool god = false);
-	void sendTiyid(QPConnection *c);
-	void receiveLogon(QPConnection *c, QPMessage &msg);
-	void sendVersion(QDataStream &ds);
-	void sendInfo(QDataStream &ds, QPConnection *c);
-	void sendUserStatus(QDataStream &ds, QPConnection *c);
-	void sendUserLog(QDataStream &ds, QPConnection *c);
-	void sendMediaUrl(QDataStream &ds, QPConnection *c);
-	void sendRoomInfo(QDataStream &ds, QPConnection *c);
-	void sendRoomUsers(QDataStream &ds, qint16 id);
-	void sendNewUser(QDataStream &ds, QPConnection *c);
+	void tiyid(QPConnection *c);
+	void logon(QPConnection *c, QPMessage &msg);
+	void version(QDataStream &ds);
+	void info(QDataStream &ds, QPConnection *c);
+	void userStatus(QDataStream &ds, QPConnection *c);
+	void userLog(QDataStream &ds, QPConnection *c);
+	void mediaUrl(QDataStream &ds, QPConnection *c);
+	void userMove(QPConnection *c, QPMessage &msg);
 };
 
 #endif // _SERVER_H

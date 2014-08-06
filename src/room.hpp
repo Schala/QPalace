@@ -94,8 +94,9 @@ struct QPImage final
 	qint16 id, alpha;
 };
 
-class QPRoom final
+class QPRoom final: public QObject
 {
+	Q_OBJECT
 public:
 	enum
 	{
@@ -112,17 +113,21 @@ public:
 #ifdef SERVER
 	QPRoom(QSqlQuery &q, qint16 id);
 	bool save() {return true;}
-	QPMessage* description() const;
+	void description(QPConnection *c, bool revised) const;
+	void users(QPConnection *c) const;
 #else
-	QPRoom() {}
-	void setDescription(QPMessage &msg);
+	QPRoom(): QObject(nullptr) {}
+	void description(QPMessage &msg);
 #endif // SERVER
 	~QPRoom();
 	inline void createHotspot(qint16 id, const QPHotspot &p) { mHotspots[id] = p; }
-	inline void addUser(QPConnection *c) { mConnections.append(c); }
 	inline qint16 id() const { return mId; }
 	inline qint32 population() const { return mConnections.size(); }
 	inline QPConnection* user(qint32 i) const { return mConnections[i]; }
+public slots:
+	void handleUserJoined(const QPRoom *r, QPConnection *c);
+	void handleUserLeft(const QPRoom *r, QPConnection *c);
+	void handleUserMoved(const QPRoom *r, const QPConnection *c);
 private:
 	QVector<QPConnection*> mConnections;
 	QByteArray mName, mImgName, mArtistName, mPwd;

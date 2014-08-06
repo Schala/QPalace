@@ -100,7 +100,7 @@ public:
 	inline qint32 id() const { return mId; }
 	inline qint16 face() const { return mFace; }
 	inline void setFace(qint16 f) { if (f < 16) mFace = f; }
-	inline QPPoint position() const { return mPos; }
+	inline const QPPoint position() const { return mPos; }
 	inline void setPosition(qint16 x, qint16 y) { mPos.x = x; mPos.y = y; }
 	inline QPAssetSpec prop(quint8 i) const { return mProps[i]; }
 	inline void setProp(quint8 i, const QPAssetSpec &p) { mProps[i] = p; }
@@ -108,12 +108,12 @@ public:
 	inline void setColor(qint16 c) { if (c < 16) mColor = c; }
 signals:
 	void readyRead();
+#ifndef SERVER
 private slots:
-#ifdef SERVER
-#else
 	void handleAboutToClose();
 	void handleDisconnected();
 #endif // SERVER
+public slots:
 	void handleReadyRead();
 private:
 #ifndef SERVER
@@ -126,12 +126,6 @@ private:
 	qint32 mAuxFlags, mId;
 	qint16 mStatus, mRoom, mFace, mColor;
 	Vendor mVendor;
-#ifndef QT_NO_DEBUG
-	const char *mRawVendor;
-public:
-	QString loginDebugInfo() const;
-	inline void setRawVendor(const char *v) { mRawVendor = v; }
-#endif // QT_NO_DEBUG
 };
 
 #endif // _CONNECTION_H
