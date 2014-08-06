@@ -5,12 +5,7 @@
 TEMPLATE = app
 INCLUDEPATH += .
 QT -= gui
-CONFIG += c++11
-
-win32 {
-	CONFIG += static
-	QMAKE_CXXFLAGS += -static-libgcc -static-libstdc++ -static
-}
+CONFIG += c++11 enctest
 
 regtest {
 	TARGET = regtest

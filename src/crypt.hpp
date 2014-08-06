@@ -3,15 +3,14 @@
 
 #include <QtGlobal>
 
-class QPCryptEngine final
+class QPCrypt final
 {
 public:
-	QPCryptEngine();
-	~QPCryptEngine();
+	QPCrypt();
 	void encrypt(char *buf, quint32 len = 254);
 	void decrypt(char *buf, quint32 len = 254);
 private:
-	qint32 mKey, *mLut;
+	qint32 mKey, mLut[512];
 };
 
 #endif // _CRYPT_H

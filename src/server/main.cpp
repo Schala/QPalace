@@ -33,6 +33,8 @@ void generateSettings(QJsonObject &data)
 	data["enforceLogonPassword"] = false;
 	data["logChat"] = true;
 	data["disableWhispering"] = false;
+    data["maxThreadCount"] = 5;
+	data["lobbyRoomId"] = 86;
 }
 
 int main(int argc, char *argv[])

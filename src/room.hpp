@@ -2,7 +2,6 @@
 #define _ROOM_H
 
 #include <QByteArray>
-#include <QSharedPointer>
 #include <QtGlobal>
 #include <QVector>
 
@@ -71,7 +70,7 @@ public:
 		NavArea
 	};
 #ifdef SERVER
-	QPHotspot() {}; // workaround ugly compiler problem
+	QPHotspot() {} // workaround ugly compiler problem
 	QPHotspot(const QJsonObject &data);
 #else
 	QPHotspot(QDataStream &buf);
@@ -112,20 +111,20 @@ public:
 	};
 #ifdef SERVER
 	QPRoom(QSqlQuery &q, qint16 id);
-	bool save() {return true;};
+	bool save() {return true;}
 	QPMessage* description() const;
 #else
-	QPRoom() {};
+	QPRoom() {}
 	void setDescription(QPMessage &msg);
 #endif // SERVER
 	~QPRoom();
 	inline void createHotspot(qint16 id, const QPHotspot &p) { mHotspots[id] = p; }
-	inline void addUser(QPConnectionPtr cptr) { mConnections.append(cptr); }
+	inline void addUser(QPConnection *c) { mConnections.append(c); }
 	inline qint16 id() const { return mId; }
 	inline qint32 population() const { return mConnections.size(); }
-	inline QPConnectionPtr user(qint32 i) const { return mConnections[i]; }
+	inline QPConnection* user(qint32 i) const { return mConnections[i]; }
 private:
-	QVector<QPConnectionPtr> mConnections;
+	QVector<QPConnection*> mConnections;
 	QByteArray mName, mImgName, mArtistName, mPwd;
 	qint32 mFlags, mFaces;
 	qint16 mId;
@@ -135,12 +134,6 @@ private:
 	QVector<QPPoint> mPoints;
 	QVector<QPSpotState> mStates;
 	QVector<QByteArray> mScripts, mImgNames, mSpotNames;
-#ifndef QT_NO_DEBUG
-public:
-	QString descDebugInfo() const;
-#endif // QT_NO_DEBUG
 };
-
-typedef QSharedPointer<QPRoom> QPRoomPtr;
 
 #endif // _ROOM_H

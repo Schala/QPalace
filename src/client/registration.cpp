@@ -6,7 +6,7 @@
 #include <QtEndian>
 #include "registration.hpp"
 
-/*static const quint32 crcMask[] =
+static const quint32 crcMask[] =
 {
 	0xebe19b94, 0x7604de74, 0xe3f9d651, 0x604fd612, 0xe8897c2c, 0xadc40920, 0x37ecdfb7, 0x334989ed, 0x2834c33b, 0x8bd2fe15, 0xcbf001a7, 0xbd96b9d6, 0x315e2ce0, 0x4f167884, 0xa489b1b6, 0xa51c7a62,
 	0x54622636, 0xbc016fc, 0x68de2d22, 0x3c9d304c, 0x44fd06fb, 0xbbb3f772, 0xd637e099, 0x849aa9f9, 0x5f240988, 0xf8373bb7, 0x30379087, 0xc7722864, 0xb0a2a643, 0xe3316071, 0x956fed7c, 0x966f937d,
@@ -24,11 +24,11 @@
 	0xf03de922, 0xa712af7b, 0xbb6168b4, 0xcc6c15b5, 0x2f202775, 0x304527e3, 0xd32bc1e6, 0xba958058, 0xa01f7214, 0xc6e8d190, 0xab96f14b, 0x18669984, 0x4f93a385, 0x403b5b40, 0x580755f1, 0x59de50e8,
 	0xf746729f, 0xff6f7d47, 0x8022ea34, 0xb24b0bcd, 0xf687a7cc, 0x7e95bab3, 0x8dc1583d, 0xb443fe9, 0xe6e45618, 0x224d746f, 0xf30624bb, 0xb7427258, 0xc78e19bf, 0xd1ee98a6, 0x66be7d3a, 0x791e342f,
 	0x68cbaab0, 0xbbb5355d, 0x8dda9081, 0xdc2736dc, 0x573355ad, 0xc3ffec65, 0xe97f0270, 0xc6a265e8, 0xd9d49152, 0x4bb35bdb, 0xa1c7bbe6, 0x15a3699a, 0xe69e1eb5, 0x7cdda410, 0x488609df, 0xd19678d3
-};*/
+};
 
 static const QByteArray codeAsc("ABCDEFGHJKLMNPQRSTUVWXYZ23456789");
 
-/*QPRegistration::QPRegistration()
+QPRegistration::QPRegistration()
 {
 	quint32 seed = QDateTime::currentDateTime.toTime_t();
 	computeCrc(seed);
@@ -47,7 +47,7 @@ void QPRegistration::computeCrc(quint32 seed)
 		mCrc = ((mCrc << 1) | (((mCrc & 0x80000000) == 0) ? 0 : 1)) ^ crcMask[current_byte];
 		seed >>= 8;
 	}
-}*/
+}
 
 QPRegistration::QPRegistration(const char *regcode)
 {
@@ -110,20 +110,3 @@ const char* QPRegistration::generate()
 		}
 	return s.data();
 }
-
-/*const char* QPRegistration::serverGen()
-{
-	QByteArray s(23, 0);
-	qsrand(QDateTime::currentDateTime().toTime_t());
-	
-	for (quint8 i = 0; i < 23; i++)
-		switch (i)
-		{
-			case 5: case 11: case 17:
-				s[i] = '-';
-				break;
-			default:
-				s[i] = codeAsc[qrand() % codeAsc.size()];
-		}
-	return s.data();
-}*/

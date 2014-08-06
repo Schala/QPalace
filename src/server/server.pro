@@ -12,8 +12,3 @@ DEFINES += SERVER
 
 HEADERS += ../shared.hpp ../crypt.hpp ../message.hpp ../connection.hpp ../room.hpp server.hpp
 SOURCES += ../crypt.cpp ../message.cpp ../connection.cpp ../room.cpp server.cpp main.cpp
-
-win32 {
-	CONFIG += staticlib
-	QMAKE_CXXFLAGS += -static-libgcc -static-libstdc++ -static
-}

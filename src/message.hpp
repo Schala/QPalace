@@ -44,14 +44,14 @@ public:
 		pLoc = 0x704c6f63,
 		ping = 0x70696e67,
 		pong = 0x706f6e67,
-		pser = 0x70736572,
+		pser = 0x70736572, // ?
 		qAst = 0x71417374,
 		qFil = 0x7146696c,
 		rAst = 0x72417374,
 		rLst = 0x724c7474,
 		regi = 0x72656769,
-		rep2 = 0x72657032, // unused
-		resp = 0x72657370,
+		rep2 = 0x72657032, // legacy, unused in server
+		resp = 0x72657370, // ?
 		rmsg = 0x726d7367,
 		room = 0x726f6f6d,
 		rprs = 0x72707273,
@@ -68,7 +68,7 @@ public:
 		smsg = 0x736d7367,
 		susr = 0x73757372,
 		talk = 0x74616c6b,
-		timy = 0x74696d79,
+		timy = 0x74696d79, // ?
 		tiyr = 0x74697972,
 		uLoc = 0x754c6f63,
 		uLst = 0x754c7374,
@@ -81,7 +81,7 @@ public:
 		usrP = 0x75737250,
 		vers = 0x76657273,
 		whis = 0x77686973,
-		wmsg = 0x776d7367,
+		wmsg = 0x776d7367, // ?
 		wprs = 0x77707273,
 		xtlk = 0x78746c6b,
 		xwis = 0x78776973

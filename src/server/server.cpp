@@ -2,12 +2,11 @@
 #include <QDateTime>
 #include <QDir>
 #include <QStandardPaths>
-#include <QTextStream>
-#include "../message.hpp"
+#include <QThreadPool>
 #include "../crypt.hpp"
 #include "server.hpp"
 
-static QString dbPath;
+static QString dbPath = QStandardPaths::standardLocations(QStandardPaths::DataLocation)[0] + (char*)"/qserver.db";
 static const char genPwdAsc[] = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 static const char roomTableDefault[] = "CREATE TABLE room(id INTEGER PRIMARY KEY, \
@@ -34,16 +33,14 @@ QPServer::QPServer(QObject *parent): QObject(parent), mUserCount(0)
 	mOptions = AllowGuests;
 	mAccessFlags = TrackLogoff;
 	mServer = new QTcpServer(this);
-	mLastRoomId = 86;
+	mLastRoomId = mLobbyId;
 	connect(mServer, SIGNAL(newConnection()), this, SLOT(handleNewConnection()));
 	
 	QStringList dataloc = QStandardPaths::standardLocations(QStandardPaths::DataLocation);
-	QDir dir = dataloc[0];
+    QDir dir = dataloc[0];
 	if (!dir.exists())
 		if (!dir.mkpath(dataloc[0]))
 			qFatal("Unable to make path %s", qPrintable(dataloc[0]));
-	QTextStream ts(&dbPath);
-	ts << dataloc[0] << "/qpserver.db";
 	QFile dbFile(dbPath);
 	
 	if (!dbFile.exists())
@@ -61,13 +58,13 @@ QPServer::~QPServer()
 	if (!mConnections.isEmpty())
 	{
 		for (auto c: mConnections)
-			c.clear();
+			delete c;
 		mConnections.clear();
 	}
 	if (!mRooms.isEmpty())
 	{
 		for (auto r: mRooms)
-			r.clear();
+			delete r;
 		mRooms.clear();
 	}
 	delete mServer;
@@ -81,7 +78,7 @@ bool QPServer::loadDb()
 	while (q.next())
 	{
 		qint16 roomId = (qint16)q.value("id").toInt();
-		mRooms.push_back(QPRoomPtr::create(q, roomId));
+		mRooms.push_back(new QPRoom(q, roomId));
 		mRoomLut[roomId] = mRooms.size()-1;
 	}
 	
@@ -104,6 +101,10 @@ bool QPServer::loadConf(const QJsonObject &data)
 	mName = data["name"].toString().toLatin1();
 	mPort = (quint16)data["port"].toInt();
 	mMediaUrl = data["mediaUrl"].toString().toLatin1();
+	mLobbyId = (qint16)data["lobbyRoomId"].toInt();
+	int maxThreadCount = data["maxThreadCount"].toInt();
+	if (maxThreadCount > 0)
+		QThreadPool::globalInstance()->setMaxThreadCount(maxThreadCount);
 	if (data["allowInsecureClients"].toBool())
 		mAccessFlags |= AllowInsecureClients;
 	if (data["allowScripts"].toBool())
@@ -196,7 +197,7 @@ QVariant QPServer::createRoom(QSqlQuery &q, const QString &name, qint32 flags,
 	if (pwd)
 	{
 		QByteArray encPwd(pwd);
-		QPCryptEngine crypt;
+		QPCrypt crypt;
 		crypt.encrypt(encPwd.data(), encPwd.size());
 		q.addBindValue(encPwd);
 	}
@@ -204,7 +205,7 @@ QVariant QPServer::createRoom(QSqlQuery &q, const QString &name, qint32 flags,
 		q.addBindValue(QVariant(QVariant::ByteArray));
 	
 	q.exec();
-	mRooms[mRooms.size()-1] = QPRoomPtr::create(q, mLastRoomId);
+	mRooms[mRooms.size()-1] = new QPRoom(q, mLastRoomId);
 	mRoomLut[mLastRoomId] = mRooms.size()-1;
 	mLastRoomId++;
 	return q.lastInsertId();
@@ -213,7 +214,7 @@ QVariant QPServer::createRoom(QSqlQuery &q, const QString &name, qint32 flags,
 QVariant QPServer::createPassword(QSqlQuery &q, const char *pwd, quint8 flags)
 {
 	QByteArray encPwd(pwd);
-	QPCryptEngine crypt;
+	QPCrypt crypt;
 	
 	q.prepare("INSERT INTO password(flags, checksum) VALUES(?, ?)");
 	q.addBindValue(flags);
@@ -226,112 +227,100 @@ QVariant QPServer::createPassword(QSqlQuery &q, const char *pwd, quint8 flags)
 	return q.lastInsertId();
 }
 
-void QPServer::sendTiyid(QPConnectionPtr cptr)
+void QPServer::sendTiyid(QPConnection *c)
 {
 #ifndef QT_NO_DEBUG
 	qDebug("Sending TIYID");
 #endif // QT_NO_DEBUG
 	QPMessage tiyid(QPMessage::tiyr, ++mUserCount);
-	QDataStream ds(cptr->socket());
+	QDataStream ds(c->socket());
 	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 	ds << tiyid;
-	cptr->setId(mUserCount);
+	c->setId(mUserCount);
 #ifndef QT_NO_DEBUG
 	tiyid.dump();
 #endif // QT_NO_DEBUG
 }
 
-bool QPServer::receiveLogon(QPConnectionPtr cptr)
+void QPServer::receiveLogon(QPConnection *c, QPMessage &msg)
 {
 #ifndef QT_NO_DEBUG
 	qDebug("Receiving logon");
 #endif // QT_NO_DEBUG
-	QPMessage logon;
-	QDataStream ds(cptr->socket());
+	QByteArray lba(msg.data(), msg.size());
+	QDataStream ds(lba);
+	ds.device()->reset();
 	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-	
-	if (cptr->socket()->bytesAvailable() >= 12)
-		ds >> logon;
-	else
-		return false;
-	
-	QByteArray lba(logon.data(), logon.size());
-	QDataStream ds1(lba);
-	ds1.device()->reset();
-	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-	
-	ds1.skipRawData(9); // 8 bits of legacy data; also discard length byte, QByteArray will auto determine
+
+	ds.skipRawData(9); // 8 bits of legacy data; also discard length byte, QByteArray will auto determine
 	char *idstr = new char[31];
-	ds1.readRawData(idstr, 31);
-	cptr->setUserName(idstr);
+	ds.readRawData(idstr, 31);
+	c->setUserName(idstr);
 	delete[] idstr;
-	
+
 	quint8 slen;
-	ds1 >> slen; // encrypted password might have null chars
+	ds >> slen; // encrypted password might have null chars
 #ifndef QT_NO_DEBUG
 	qDebug("Read password length of %u characters.", slen);
 #endif // QT_NO_DEBUG
 	if (slen)
 	{
 		idstr = new char[slen];
-		ds1.readRawData(idstr, slen);
+		ds.readRawData(idstr, slen);
 #ifndef QT_NO_DEBUG
-		QPCryptEngine crypt;
+		QPCrypt crypt;
 		crypt.decrypt(idstr, slen);
 #endif // QT_NO_DEBUG
-		cptr->setWizardPassword(idstr, slen);
+		c->setWizardPassword(idstr, slen);
 		delete[] idstr;
 	}
-	ds1.skipRawData(31 - slen);
-	
+	ds.skipRawData(31 - slen);
+
 	qint32 flags;
-	ds1 >> flags;
-	cptr->setAuxFlags(flags);
-	
-	ds1.skipRawData(20); // legacy data
-	
+	ds >> flags;
+	c->setAuxFlags(flags);
+
+	ds.skipRawData(20); // legacy data
+
 	qint16 roomId;
-	ds1 >> roomId;
-	cptr->setRoom(roomId);
-	
+	ds >> roomId;
+	c->setRoom(roomId);
+
 	idstr = new char[7];
 	idstr[6] = '\0';
-	ds1.readRawData(idstr, 6);
-	cptr->setVendor(QPConnection::vendorFromString(idstr));
+	ds.readRawData(idstr, 6);
+	c->setVendor(QPConnection::vendorFromString(idstr));
 #ifndef QT_NO_DEBUG
-	cptr->setRawVendor(idstr);
+	c->setRawVendor(idstr);
 	idstr = nullptr;
 #else
 	delete[] idstr;
 #endif // QT_NO_DEBUG
-	
-	ds1.skipRawData(24); // unused data
+
+	ds.skipRawData(24); // unused data
 #ifndef QT_NO_DEBUG
-	logon.dump();
+	msg.dump();
 #endif // QT_NO_DEBUG
-	return true;
 }
 
-void QPServer::sendVersion(QPConnectionPtr cptr)
+void QPServer::sendVersion(QDataStream &ds)
 {
 #ifndef QT_NO_DEBUG
 	qDebug("Sending version");
 #endif // QT_NO_DEBUG
 	QPMessage version(QPMessage::vers, 0x00010016);
-	QDataStream ds(cptr->socket());
-	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 	ds << version;
 #ifndef QT_NO_DEBUG
 	version.dump();
 #endif // QT_NO_DEBUG
 }
 
-void QPServer::sendInfo(QPConnectionPtr cptr)
+void QPServer::sendInfo(QDataStream &ds, QPConnection *c)
 {
 #ifndef QT_NO_DEBUG
 	qDebug("Sending server info");
 #endif // QT_NO_DEBUG
-	QPMessage sinfo(QPMessage::sinf, cptr->id());
+	QPMessage sinfo(QPMessage::sinf, c->id());
 	QByteArray ba;
 	QDataStream ds1(&ba, QIODevice::WriteOnly);
 	ds1.device()->reset();
@@ -343,42 +332,38 @@ void QPServer::sendInfo(QPConnectionPtr cptr)
 	ds1 << mOptions << mUlCaps << mDlCaps;
 	
 	sinfo.setData(ba);
-	QDataStream ds(cptr->socket());
-	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 	ds << sinfo;
 #ifndef QT_NO_DEBUG
 	sinfo.dump();
 #endif // QT_NO_DEBUG
 }
 
-void QPServer::sendUserStatus(QPConnectionPtr cptr)
+void QPServer::sendUserStatus(QDataStream &ds, QPConnection *c)
 {
 #ifndef QT_NO_DEBUG
 	qDebug("Sending user status");
 #endif // QT_NO_DEBUG
-	QPMessage ustatus(QPMessage::uSta, cptr->id());
+	QPMessage ustatus(QPMessage::uSta, c->id());
 	QByteArray ba;
 	QDataStream ds1(&ba, QIODevice::WriteOnly);
 	ds1.device()->reset();
 	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 	
-	ds1 << cptr->status();
+	ds1 << c->status();
 	
 	ustatus.setData(ba);
-	QDataStream ds(cptr->socket());
-	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 	ds << ustatus;
 #ifndef QT_NO_DEBUG
 	ustatus.dump();
 #endif // QT_NO_DEBUG
 }
 
-void QPServer::sendUserLog(QPConnectionPtr cptr)
+void QPServer::sendUserLog(QDataStream &ds, QPConnection *c)
 {
 #ifndef QT_NO_DEBUG
 	qDebug("Sending userlog");
 #endif // QT_NO_DEBUG
-	QPMessage ulog(QPMessage::log, cptr->id());
+	QPMessage ulog(QPMessage::log, c->id());
 	QByteArray ba;
 	QDataStream ds1(&ba, QIODevice::WriteOnly);
 	ds1.device()->reset();
@@ -387,20 +372,18 @@ void QPServer::sendUserLog(QPConnectionPtr cptr)
 	ds1 << mUserCount;
 	
 	ulog.setData(ba);
-	QDataStream ds(cptr->socket());
-	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 	ds << ulog;
 #ifndef QT_NO_DEBUG
 	ulog.dump();
 #endif // QT_NO_DEBUG
 }
 
-void QPServer::sendMediaUrl(QPConnectionPtr cptr)
+void QPServer::sendMediaUrl(QDataStream &ds, QPConnection *c)
 {
 #ifndef QT_NO_DEBUG
 	qDebug("Sending HTTP");
 #endif // QT_NO_DEBUG
-	QPMessage http(QPMessage::HTTP, cptr->id());
+	QPMessage http(QPMessage::HTTP, c->id());
 	QByteArray ba;
 	QDataStream ds1(&ba, QIODevice::WriteOnly);
 	ds1.device()->reset();
@@ -410,30 +393,27 @@ void QPServer::sendMediaUrl(QPConnectionPtr cptr)
 	ds1 << (quint8)0;
 	
 	http.setData(ba);
-	QDataStream ds(cptr->socket());
-	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 	ds << http;
 #ifndef QT_NO_DEBUG
 	http.dump();
 #endif // QT_NO_DEBUG
 }
 
-void QPServer::sendRoomInfo(QPConnectionPtr cptr, qint16 id)
+void QPServer::sendRoomInfo(QDataStream &ds, QPConnection *c)
 {
 #ifndef QT_NO_DEBUG
 	qDebug("Sending room description");
 #endif // QT_NO_DEBUG
-	QPMessage *room = mRooms[mRoomLut[id]]->description();
-	QDataStream ds(cptr->socket());
-	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+	QPMessage *room = mRooms[mRoomLut[c->room()]]->description();
 	ds << *room;
 #ifndef QT_NO_DEBUG
 	room->dump();
 #endif // QT_NO_DEBUG
 	delete room;
+	sendRoomUsers(ds, c->room());
 }
 
-void QPServer::sendRoomUsers(QPConnectionPtr cptr, qint16 id)
+void QPServer::sendRoomUsers(QDataStream &ds, qint16 id)
 {
 #ifndef QT_NO_DEBUG
 	qDebug("Sending room users");
@@ -444,7 +424,7 @@ void QPServer::sendRoomUsers(QPConnectionPtr cptr, qint16 id)
 	QDataStream ds1(&ba, QIODevice::WriteOnly);
 	ds1.device()->reset();
 	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-	
+
 	for (qint32 i = 0; i < mRooms[mRoomLut[id]]->population(); i++)
 	{
 		ds1 << mRooms[mRoomLut[id]]->user(i)->id();
@@ -455,22 +435,20 @@ void QPServer::sendRoomUsers(QPConnectionPtr cptr, qint16 id)
 		ds1 << mRooms[mRoomLut[id]]->user(i)->face();
 		ds1 << mRooms[mRoomLut[id]]->user(i)->color();
 		ds1 << (qint32)0; // not used
-		
+
 		qint16 activeProps = 0;
 		for (quint8 j = 0; j < 9; j++)
 			if (mRooms[mRoomLut[id]]->user(i)->prop(j).id && mRooms[mRoomLut[id]]->user(i)->prop(j).crc)
 				activeProps++;
 		ds1 << activeProps;
-		
+
 		quint8 nlen = qstrlen(mRooms[mRoomLut[id]]->user(i)->userName());
 		ds1 << nlen;
 		ds1.writeRawData(mRooms[mRoomLut[id]]->user(i)->userName(), nlen);
 		for (quint8 j = 0; j < (31 - nlen); j++)
 			ds1 << (quint8)0;
 	}
-	
-	QDataStream ds(cptr->socket());
-	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
 	rprs.setData(ba);
 	ds << rprs << endr;
 #ifndef QT_NO_DEBUG
@@ -479,40 +457,38 @@ void QPServer::sendRoomUsers(QPConnectionPtr cptr, qint16 id)
 #endif // QT_NO_DEBUG
 }
 
-void QPServer::sendNewUser(QPConnectionPtr cptr)
+void QPServer::sendNewUser(QDataStream &ds, QPConnection *c)
 {
 #ifndef QT_NO_DEBUG
 	qDebug("Sending new user");
 #endif // QT_NO_DEBUG
-	QPMessage nprs(QPMessage::nprs, cptr->id());
+	QPMessage nprs(QPMessage::nprs, c->id());
 	QByteArray ba;
 	QDataStream ds1(&ba, QIODevice::WriteOnly);
 	ds1.device()->reset();
 	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-	
-	ds1 << cptr->id();
-	ds1 << cptr->position().x << cptr->position().y;
+
+	ds1 << c->id();
+	ds1 << c->position().x << c->position().y;
 	for (quint8 j = 0; j < 9; j++)
-		ds1 << cptr->prop(j).id << cptr->prop(j).crc;
-	ds1 << cptr->room();
-	ds1 << cptr->face();
-	ds1 << cptr->color();
+		ds1 << c->prop(j).id << c->prop(j).crc;
+	ds1 << c->room();
+	ds1 << c->face();
+	ds1 << c->color();
 	ds1 << (qint32)0; // not used
-	
+
 	qint16 activeProps = 0;
 	for (quint8 j = 0; j < 9; j++)
-		if (cptr->prop(j).id && cptr->prop(j).crc)
+		if (c->prop(j).id && c->prop(j).crc)
 			activeProps++;
 	ds1 << activeProps;
-	
-	quint8 nlen = qstrlen(cptr->userName());
+
+	quint8 nlen = qstrlen(c->userName());
 	ds1 << nlen;
-	ds1.writeRawData(cptr->userName(), nlen);
+	ds1.writeRawData(c->userName(), nlen);
 	for (quint8 j = 0; j < (31 - nlen); j++)
 		ds1 << (quint8)0;
-	
-	QDataStream ds(cptr->socket());
-	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
 	nprs.setData(ba);
 	ds << nprs;
 #ifndef QT_NO_DEBUG
@@ -522,58 +498,75 @@ void QPServer::sendNewUser(QPConnectionPtr cptr)
 
 void QPServer::handleNewConnection()
 {
-	QPConnectionPtr client = QPConnectionPtr(new QPConnection(mServer->nextPendingConnection()));
-	sendTiyid(client);
-	
-	if (!client->socket()->waitForReadyRead())
-		qDebug("Connection from %s timed out.", qPrintable(client->socket()->peerAddress().toString()));
-	
-	if (receiveLogon(client))
-		if ((mAccessFlags & AllowInsecureClients) || client->isSecureVendor())
-		{
-			mConnections.push_back(client);
-			qDebug("[%s] %s logged in from %s using %s client on %s.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
-				client->userName(), qPrintable(client->socket()->peerAddress().toString()), QPConnection::vendorToString(client->vendor()),
-				client->osToString());
-#ifndef QT_NO_DEBUG
-			qDebug("\n%s", qPrintable(client->loginDebugInfo()));
-#endif // QT_NO_DEBUG
-		}
-		else
-		{
-			qDebug("[%s] %s connection dropped because of use of insecure client: %s.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
-				qPrintable(client->socket()->peerAddress().toString()), QPConnection::vendorToString(client->vendor()));
-#ifndef QT_NO_DEBUG
-			qDebug("\n%s", qPrintable(client->loginDebugInfo()));
-#endif // QT_NO_DEBUG
-			client.clear();
-			mUserCount--;
-			return;
-		}
+	QPConnection *c = new QPConnection(mServer->nextPendingConnection());
+	connect(c, SIGNAL(readyRead()), this, SLOT(handleReadyRead()));
+
+	sendTiyid(c);
+
+	if (!c->socket()->waitForReadyRead())
+		qDebug("[%s] Connection from %s timed out.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
+			qPrintable(c->socket()->peerAddress().toString()));
+}
+
+void QPServer::handleReadyRead()
+{
+	QPMessage msg;
+	QPConnection *c = (QPConnection*)sender();
+	QDataStream ds(c->socket());
+	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+	if (c->socket()->bytesAvailable() >= 12)
+		ds >> msg;
 	else
 	{
-		qWarning("[%s] %s connection dropped because of corrupt or incomplete logon data!", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
-			qPrintable(client->socket()->peerAddress().toString()));
-		client.clear();
+		qWarning("[%s] %s connection dropped because of incomplete packet data!", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
+			qPrintable(c->socket()->peerAddress().toString()));
+		delete c;
 		mUserCount--;
-		return;
 	}
-	
-	qsrand(QDateTime::currentDateTime().toTime_t());
-	client->setFace(qrand() % 16);
-	client->setColor(qrand() % 16);
-	client->setPosition(0, 0); // placeholder, todo: fetch room bg width/height and randomise pos
-	client->setRoom(86);
-	
-	sendVersion(client);
-	sendInfo(client);
-	sendUserStatus(client);
-	sendUserLog(client);
-	sendMediaUrl(client);
-	sendRoomInfo(client, 86);
+
+	switch (msg.id())
+	{
+		case QPMessage::regi:
+			receiveLogon(c, msg);
+			if ((mAccessFlags & AllowInsecureClients) || c->isSecureVendor())
+			{
+				mConnections.push_back(c);
+				qDebug("[%s] %s logged in from %s using %s client on %s.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
+					c->userName(), qPrintable(c->socket()->peerAddress().toString()), QPConnection::vendorToString(c->vendor()),
+					c->osToString());
 #ifndef QT_NO_DEBUG
-			qDebug("\n%s", qPrintable(mRooms[mRoomLut[86]]->descDebugInfo()));
+				qDebug("\n%s", qPrintable(c->loginDebugInfo()));
 #endif // QT_NO_DEBUG
-	sendRoomUsers(client, 86);
-	sendNewUser(client);
+			}
+			else
+			{
+				qDebug("[%s] %s connection dropped because of use of insecure client: %s.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
+					qPrintable(c->socket()->peerAddress().toString()), QPConnection::vendorToString(c->vendor()));
+#ifndef QT_NO_DEBUG
+				qDebug("\n%s", qPrintable(c->loginDebugInfo()));
+#endif // QT_NO_DEBUG
+				delete c;
+				mUserCount--;
+				return;
+			}
+
+			qsrand(QDateTime::currentDateTime().toTime_t());
+			c->setFace(qrand() % 16);
+			c->setColor(qrand() % 16);
+			c->setPosition(0, 0); // placeholder, todo: fetch room bg width/height and randomise pos
+			c->setRoom(mLobbyId);
+
+			sendVersion(ds);
+			sendInfo(ds, c);
+			sendUserStatus(ds, c);
+			sendUserLog(ds, c);
+			sendMediaUrl(ds, c);
+			sendRoomInfo(ds, c);
+			sendNewUser(ds, c);
+			break;
+		default:
+			qWarning("[%s] %s has sent an unknown or unsupported packet (%X). Ignoring...", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
+				qPrintable(c->socket()->peerAddress().toString()), msg.id());
+	}
 }

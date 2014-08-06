@@ -14,11 +14,13 @@
 #include <QVector>
 
 #include "../connection.hpp"
+#include "../message.hpp"
 #include "../room.hpp"
 
 class QPServer final: public QObject
 {
 	Q_OBJECT
+	friend class QPMessageHandler;
 public:
 	enum
 	{
@@ -35,7 +37,8 @@ public:
 		PurgeInactiveProps = 0x0400,
 		KillFlooders = 0x0800,
 		NoSpoofing = 0x1000,
-		UserCreatedRooms = 0x2000
+		UserCreatedRooms = 0x2000,
+		AllowInsecureClients = 0x4000
 	};
 	enum
 	{
@@ -47,7 +50,6 @@ public:
 		SortOptions = 0x00000080, // ?
 		TrackLogoff = 0x00000100,
 		JavaSecure = 0x00000200,
-		AllowInsecureClients = 0x00000400,
 		FlashSecure = 0x00000800 // new addition, but unused due to port limitations
 	};
 	enum
@@ -74,31 +76,32 @@ public:
 	bool start();
 private slots:
 	void handleNewConnection();
+	void handleReadyRead();
 private:
-	QVector<QPRoomPtr> mRooms;
+	QVector<QPRoom*> mRooms;
 	QHash<qint16, qint16> mRoomLut;
-	QVector<QPConnectionPtr> mConnections;
+	QVector<QPConnection*> mConnections;
 	QSqlDatabase mDb;
 	QTcpServer *mServer;
 	QByteArray mName, mMediaUrl;
 	quint32 mOptions, mDlCaps, mUlCaps;
 	qint32 mAccessFlags, mUserCount; // for ID assignment
 	quint16 mPort;
-	qint16 mLastRoomId; // for ID assignment
+	qint16 mLobbyId, mLastRoomId; // for ID assignment
 	
 	QSqlError generateDefaultDb();
 	bool loadDb();
 	void generatePassword(QSqlQuery &q, bool god = false);
-	void sendTiyid(QPConnectionPtr cptr);
-	bool receiveLogon(QPConnectionPtr cptr);
-	void sendVersion(QPConnectionPtr cptr);
-	void sendInfo(QPConnectionPtr cptr);
-	void sendUserStatus(QPConnectionPtr cptr);
-	void sendUserLog(QPConnectionPtr cptr);
-	void sendMediaUrl(QPConnectionPtr cptr);
-	void sendRoomInfo(QPConnectionPtr cptr, qint16 id);
-	void sendRoomUsers(QPConnectionPtr cptr, qint16 id);
-	void sendNewUser(QPConnectionPtr cptr);
+	void sendTiyid(QPConnection *c);
+	void receiveLogon(QPConnection *c, QPMessage &msg);
+	void sendVersion(QDataStream &ds);
+	void sendInfo(QDataStream &ds, QPConnection *c);
+	void sendUserStatus(QDataStream &ds, QPConnection *c);
+	void sendUserLog(QDataStream &ds, QPConnection *c);
+	void sendMediaUrl(QDataStream &ds, QPConnection *c);
+	void sendRoomInfo(QDataStream &ds, QPConnection *c);
+	void sendRoomUsers(QDataStream &ds, qint16 id);
+	void sendNewUser(QDataStream &ds, QPConnection *c);
 };
 
 #endif // _SERVER_H

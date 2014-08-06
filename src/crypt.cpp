@@ -1,9 +1,8 @@
 #include "crypt.hpp"
 
-QPCryptEngine::QPCryptEngine()
+QPCrypt::QPCrypt()
 {
 	mKey = 0xa2c2a;
-	mLut = new qint32[512];
 	qint32 quo, rem, k;
 	
 	for (quint16 i = 0; i < 512; i++)
@@ -17,13 +16,7 @@ QPCryptEngine::QPCryptEngine()
 	mKey = 1;
 }
 
-QPCryptEngine::~QPCryptEngine()
-{
-	if (mLut)
-		delete[] mLut;
-}
-
-void QPCryptEngine::encrypt(char *buf, quint32 len)
+void QPCrypt::encrypt(char *buf, quint32 len)
 {
 	qint32 lastChar = 0, rc = 0;
 	quint8 b;
@@ -36,7 +29,7 @@ void QPCryptEngine::encrypt(char *buf, quint32 len)
 	}
 }
 
-void QPCryptEngine::decrypt(char *buf, quint32 len)
+void QPCrypt::decrypt(char *buf, quint32 len)
 {
 	quint8 lastChar = 0, b;
 	qint32 rc = 0;

@@ -9,24 +9,21 @@ QPConnection::QPConnection(QTcpSocket *sock, const char *name, const QPRegistrat
 	mUid(uid), mAuxFlags(auxFlags), mVendor(QPConnection::Vendor::QPalace)
 {
 	mWizardPwd = wizpwd ? wizpwd : QByteArray();
-	
-	mProps = new QPAssetSpec[9];
+
 	for (quint8 i = 0; i < 9; i++)
 		mProps[i].id = mProps[i].crc = 0;
 }
 #else
 QPConnection::QPConnection(QTcpSocket *sock): mSocket(sock)
 {
-	mProps = new QPAssetSpec[9];
-	
 	for (quint8 i = 0; i < 9; i++)
 		mProps[i].id = mProps[i].crc = 0;
+	connect(mSocket, SIGNAL(readyRead()), this, SLOT(handleReadyRead()));
 }
 #endif // SERVER
 
 QPConnection::~QPConnection()
 {
-	delete[] mProps;
 	mSocket->abort();
 	delete mSocket;
 }
@@ -49,20 +46,13 @@ const char* QPConnection::vendorToString(QPConnection::Vendor vendor)
 {
 	switch (vendor)
 	{
-		case QPConnection::Vendor::PalaceChat:
-			return "PalaceChat";
-		case QPConnection::Vendor::OpenPalace:
-			return "OpenPalace";
-		case QPConnection::Vendor::PalaceViewer:
-			return "ThePalace Viewer";
-		case QPConnection::Vendor::Phalanx:
-			return "Phalanx";
-		case QPConnection::Vendor::InstantPalace:
-			return "InstantPalace";
-		case QPConnection::Vendor::QPalace:
-			return "QPalace";
-		default:
-			return "unknown";
+		case QPConnection::Vendor::PalaceChat: return "PalaceChat";
+		case QPConnection::Vendor::OpenPalace: return "OpenPalace";
+		case QPConnection::Vendor::PalaceViewer: return "ThePalace Viewer";
+		case QPConnection::Vendor::Phalanx: return "Phalanx";
+		case QPConnection::Vendor::InstantPalace: return "InstantPalace";
+		case QPConnection::Vendor::QPalace: return "QPalace";
+		default: return "unknown";
 	}
 }
 
@@ -85,47 +75,32 @@ const char* QPConnection::osToString() const
 	
 	switch (flags)
 	{
-		case Win32:
-			return "Windows (32-bit)";
-		case Java:
-			return "Java";
-		case MacIntel:
-			return "Mac OS X";
-		case Win64:
-			return "Windows (64-bit)";
-		case LinuxX86:
-			return "Linux (x86)";
-		case LinuxX86_64:
-			return "Linux (x86_64)";
-		case LinuxARM:
-			return "Linux (ARM)";
-		case AndroidARMv5:
-			return "Android (ARMv5)";
-		case AndroidARMv7:
-			return "Android (ARMv7)";
-		case AndroidX86:
-			return "Android (x86)";
-		case Dalvik:
-			return "Dalvik";
-		case iOS:
-			return "iOS";
-		case iOSSim:
-			return "iOS Simulator";
-		case WinRT:
-			return "Windows RT";
-		case CLR:
-			return ".NET";
-		case Python:
-			return "Python";
-		case Ruby:
-			return "Ruby";
-		case Flash:
-			return "Flash";
-		case Web:
-			return "the web";
-		default:
-			return "an unknown machine";
+		case Win32: return "Windows (32-bit)";
+		case Java: return "Java";
+		case MacX86: return "Mac OS X";
+		case Win64: return "Windows (64-bit)";
+		case LinuxX86: return "Linux (x86)";
+		case LinuxX86_64: return "Linux (x86_64)";
+		case AndroidARMv5: return "Android (ARMv5)";
+		case AndroidARMv7: return "Android (ARMv7)";
+		case AndroidX86: return "Android (x86)";
+		case Dalvik: return "Dalvik";
+		case iOS: return "iOS";
+		case iOSSim: return "iOS Simulator";
+		case WinRT: return "Windows RT";
+		case CLR: return ".NET";
+		case Python2: return "Python v2";
+		case Python3: return "Python v3";
+		case Ruby: return "Ruby";
+		case Flash: return "Flash";
+		case Web: return "the web";
+		default: return "old or unknown platform";
 	}
+}
+
+void QPConnection::handleReadyRead()
+{
+	emit readyRead();
 }
 
 #ifndef QT_NO_DEBUG

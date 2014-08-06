@@ -2,7 +2,6 @@
 #define _CONNECTION_H
 
 #include <QByteArray>
-#include <QSharedPointer>
 #include <QTcpSocket>
 #include <QtGlobal>
 #ifndef QT_NO_DEBUG
@@ -16,22 +15,22 @@
 #include "client/registration.hpp"
 #endif // SERVER
 
-class QPConnection final
+class QPConnection final: public QObject
 {
+	Q_OBJECT
 public:
 	enum
 	{
 		UnknownMachine = 0,
-		Mac68k,
+		Mac68K,
 		MacPPC,
 		Win16,
 		Win32,
 		Java,
-		MacIntel,
+		MacX86,
 		Win64,
 		LinuxX86,
 		LinuxX86_64,
-		LinuxARM,
 		AndroidARMv5,
 		AndroidARMv7,
 		AndroidX86,
@@ -40,7 +39,8 @@ public:
 		iOSSim,
 		WinRT,
 		CLR,
-		Python,
+		Python2,
+		Python3,
 		Ruby,
 		Flash,
 		Web,
@@ -106,12 +106,21 @@ public:
 	inline void setProp(quint8 i, const QPAssetSpec &p) { mProps[i] = p; }
 	inline qint16 color() const { return mColor; }
 	inline void setColor(qint16 c) { if (c < 16) mColor = c; }
+signals:
+	void readyRead();
+private slots:
+#ifdef SERVER
+#else
+	void handleAboutToClose();
+	void handleDisconnected();
+#endif // SERVER
+	void handleReadyRead();
 private:
 #ifndef SERVER
 	QPRegistration mReg, mUid;
 #endif // SERVER
 	QTcpSocket *mSocket;
-	QPAssetSpec *mProps;
+	QPAssetSpec mProps[9];
 	QByteArray mUserName, mWizardPwd;
 	QPPoint mPos;
 	qint32 mAuxFlags, mId;
@@ -119,13 +128,10 @@ private:
 	Vendor mVendor;
 #ifndef QT_NO_DEBUG
 	const char *mRawVendor;
-
 public:
 	QString loginDebugInfo() const;
 	inline void setRawVendor(const char *v) { mRawVendor = v; }
 #endif // QT_NO_DEBUG
 };
-
-typedef QSharedPointer<QPConnection> QPConnectionPtr;
 
 #endif // _CONNECTION_H
