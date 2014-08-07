@@ -10,15 +10,15 @@ class QPMessage final
 public:
 	enum
 	{
-		FPSq = 0x46505371,
+		FPSq = 0x46505371, // ?
 		HTTP = 0x48545450,
 		NOOP = 0x4e4f4f50,
-		aAst = 0x61417374,
+		aAst = 0x61417374, // ?
 		auth = 0x61757468,
 		autr = 0x61757472,
 		blow = 0x626c6f77,
 		bye = 0x62796520,
-		cLog = 0x634c6f67,
+		cLog = 0x634c6f67, // ?
 		coLs = 0x636f4c73,
 		dPrp = 0x64507270,
 		down = 0x646f776e,
@@ -28,19 +28,19 @@ public:
 		eprs = 0x65707273,
 		fnfe = 0x666e6665,
 		gmsg = 0x676d7367,
-		init = 0x696e6974,
+		init = 0x696e6974, // ?
 		kill = 0x6b696c6c,
 		lock = 0x6c6f636b,
 		log = 0x6c6f6720,
 		mPrp = 0x6d507270,
-		nPct = 0x6e506374,
+		nPct = 0x6e506374, // ?
 		nPrp = 0x6e507270,
 		nRom = 0x6e526f6d,
 		navR = 0x6e617652,
 		nprs = 0x6e707273,
 		opSd = 0x6f705364,
 		opSn = 0x6f70536e,
-		opSs = 0x6f705373,
+		opSs = 0x6f705373, // ?
 		pLoc = 0x704c6f63,
 		ping = 0x70696e67,
 		pong = 0x706f6e67,
@@ -60,8 +60,8 @@ public:
 		sErr = 0x73457272,
 		sFil = 0x7346696c,
 		sInf = 0x73496e66,
-		sPct = 0x73506374,
-		sPrp = 0x73507270,
+		sPct = 0x73506374, // ?
+		sPrp = 0x73507270, // ?
 		sRom = 0x73526f6d,
 		sSta = 0x73537461,
 		sinf = 0x73696e66,

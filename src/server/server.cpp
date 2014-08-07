@@ -12,7 +12,7 @@ static const char genPwdAsc[] = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWX
 static const char roomTableDefault[] = "CREATE TABLE room(id INTEGER PRIMARY KEY, \
 name VARCHAR, flags INTEGER, faces_id INTEGER, img_name VARCHAR, artist_name VARCHAR, \
 password BLOB, hotspots BLOB, images BLOB, loose_props BLOB, scripts BLOB, points BLOB, \
-states BLOB, spot_names BLOB)";
+states BLOB, spot_names BLOB, draw_buffer BLOB)";
 
 static const char propTableDefault[] = "CREATE TABLE prop(id INTEGER PRIMARY KEY, crc INTEGER)";
 

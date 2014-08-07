@@ -2,6 +2,7 @@
 #define _ROOM_H
 
 #include <QByteArray>
+#include <QDataStream>
 #include <QtGlobal>
 #include <QVector>
 
@@ -85,7 +86,8 @@ private:
 
 struct QPLooseProp final
 {
-	qint32 propId, propCrc, flags, ref;
+	QPAssetSpec prop;
+	qint32 flags, ref;
 	QPPoint location;
 };
 
@@ -93,6 +95,43 @@ struct QPImage final
 {
 	qint16 id, alpha;
 };
+
+class QPDraw final
+{
+	friend class QPRoom;
+	friend QDataStream& operator<<(QDataStream &ds, const QPDraw &draw);
+	friend QDataStream& operator>>(QDataStream &ds, QPDraw &draw);
+public:
+	enum
+	{
+		Path = 0,
+		Shape,
+		Text,
+		Detonate,
+		Delete,
+		Ellipse
+	};
+	enum
+	{
+		Back = 0,
+		Fill = 0x01,
+		Ellipsed = 0x40,
+		Front = 0x80,
+	};
+#ifdef SERVER
+	QPDraw() {}
+	QPDraw(const QJsonObject &data);
+#else
+#endif // SERVER
+private:
+	QVector<QPPoint> mPolygon;
+	qreal mPenAlpha, mFillAlpha, mLineAlpha;
+	qint32 mPenClr, mFillClr, mLineClr;
+	qint16 mPenSize, mFlags, mCmd;
+};
+
+QDataStream& operator<<(QDataStream &ds, const QPDraw &draw);
+QDataStream& operator>>(QDataStream &ds, QPDraw &draw);
 
 class QPRoom final: public QObject
 {
@@ -139,6 +178,7 @@ private:
 	QVector<QPLooseProp> mLProps;
 	QVector<QPPoint> mPoints;
 	QVector<QPSpotState> mStates;
+	QVector<QPDraw> mDraws;
 	QVector<QByteArray> mScripts, mImgNames, mSpotNames;
 };
 
