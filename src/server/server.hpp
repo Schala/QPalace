@@ -6,13 +6,13 @@
 #include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlError>
-#include <QSqlQuery>
 #include <QString>
 #include <QTcpServer>
 #include <QtGlobal>
 #include <QVariant>
 #include <QVector>
 
+#include "../blowthru.hpp"
 #include "../connection.hpp"
 #include "../message.hpp"
 #include "../room.hpp"
@@ -67,13 +67,14 @@ public:
 	QPServer(QObject *parent = nullptr);
 	~QPServer();
 	bool loadConf(const QJsonObject &data);
-	QVariant createRoom(QSqlQuery &q, const QString &name, qint32 flags,
+	QVariant createRoom(const QString &name, qint32 flags,
 		const QString &bg, const char *pwd = nullptr, const QString &artist = QString());
-	QVariant createPassword(QSqlQuery &q, const char *pwd, quint8 flags = 0);
+	QVariant createPassword(const char *pwd, quint8 flags = 0);
 	inline quint16 port() const { return mServer->serverPort(); }
 	inline const char* name() const { return mName; }
 	bool start();
 signals:
+	void roomBlowThru(const QPRoom *r, QPBlowThru *blow);
 	void roomEdited(const QPRoom *r);
 	void userJoinedRoom(const QPRoom *r, QPConnection *c);
 	void userLeftRoom(const QPRoom *r, QPConnection *c);
@@ -85,8 +86,8 @@ private slots:
 	void handleReadyRead();
 private:
 	QVector<QPRoom*> mRooms;
-	QHash<qint32, qint32> mUserLut;
-	QHash<qint16, qint16> mRoomLut;
+	QHash<qint32, QPConnection*> mUserLut;
+	QHash<qint16, QPRoom*> mRoomLut;
 	QVector<QPConnection*> mConnections;
 	QSqlDatabase mDb;
 	QTcpServer *mServer;
@@ -94,11 +95,11 @@ private:
 	quint32 mOptions, mDlCaps, mUlCaps;
 	qint32 mAccessFlags, mUserCount; // for ID assignment
 	quint16 mPort;
-	qint16 mLobbyId, mLastRoomId; // for ID assignment
+	qint16 mLastRoomId; // for ID assignment
 	
-	QSqlError generateDefaultDb();
+	QSqlError generateDefaultDb(QString path);
 	bool loadDb();
-	void generatePassword(QSqlQuery &q, bool god = false);
+	void generatePassword(bool god = false);
 	void tiyid(QPConnection *c);
 	void logon(QPConnection *c, QPMessage &msg);
 	void version(QDataStream &ds);
@@ -107,6 +108,8 @@ private:
 	void userLog(QDataStream &ds, QPConnection *c);
 	void mediaUrl(QDataStream &ds, QPConnection *c);
 	void userMove(QPConnection *c, QPMessage &msg);
+	QPBlowThru* blowThru(QPMessage &msg);
+	void blowThru(QPBlowThru *blow);
 };
 
 #endif // _SERVER_H

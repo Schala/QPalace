@@ -6,15 +6,16 @@
 #include "room.hpp"
 
 #ifdef SERVER
-
 #include <QJsonArray>
+#include <QSqlQuery>
 #include <QSqlRecord>
 
-QPRoom::QPRoom(QSqlQuery &q, qint16 id)
+QPRoom::QPRoom(qint16 id)
 {
-	mId = id;
-	if ( id >= 86)
-		id -= 86;
+	mId = id--;
+
+	QSqlQuery q;
+	q.exec("SELECT * FROM room");
 	if (!q.seek(id))
 		qWarning("Malformed SQL query for room %d record retrieval!", id);
 	else
@@ -285,7 +286,7 @@ void QPRoom::description(QPConnection *c, bool revised) const
 	ds1 << (quint16)buf.size();
 	ba += buf;
 	QPMessage msg = revised ? QPMessage(QPMessage::sRom) : QPMessage(QPMessage::room);
-	msg.setData(ba);
+	msg = ba;
 	QDataStream ds(c->socket());
 	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 	ds << msg;
@@ -329,7 +330,7 @@ void QPRoom::users(QPConnection *c) const
 
 	QPMessage rprs(QPMessage::rprs, population());
 	QPMessage endr(QPMessage::endr);
-	rprs.setData(ba);
+	rprs = ba;
 	QDataStream ds(c->socket());
 	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 	ds << rprs << endr;
@@ -443,7 +444,7 @@ void QPRoom::handleUserJoined(const QPRoom *r, QPConnection *c)
 		for (quint8 j = 0; j < (31 - nlen); j++)
 			ds1 << (quint8)0;
 
-		nprs.setData(ba);
+		nprs = ba;
 
 		for (auto p: mConnections)
 		{
@@ -486,7 +487,7 @@ void QPRoom::handleUserMoved(const QPRoom *r, const QPConnection *c)
 
 		ds1 << c->position().x << c->position().y;
 
-		umove.setData(ba);
+		umove = ba;
 
 		for (auto p: mConnections)
 		{
@@ -494,5 +495,23 @@ void QPRoom::handleUserMoved(const QPRoom *r, const QPConnection *c)
 			ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 			ds << umove;
 		}
+	}
+}
+
+void QPRoom::handleBlowThru(const QPRoom *r, QPBlowThru *blow)
+{
+	if (this == r)
+	{
+		QPMessage msg(QPMessage::blow);
+		msg << blow;
+
+		for (auto c: mConnections)
+		{
+			QDataStream ds(c->socket());
+			ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+			ds << msg;
+		}
+
+		delete blow;
 	}
 }

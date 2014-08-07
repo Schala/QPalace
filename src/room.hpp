@@ -11,9 +11,9 @@
 
 #ifdef SERVER
 #include <QJsonObject>
-#include <QSqlQuery>
 #endif // SERVER
 
+#include "blowthru.hpp"
 #include "message.hpp"
 #include "connection.hpp"
 #include "shared.hpp"
@@ -111,7 +111,7 @@ public:
 		DropZone = 0x0100
 	};
 #ifdef SERVER
-	QPRoom(QSqlQuery &q, qint16 id);
+	QPRoom(qint16 id);
 	bool save() {return true;}
 	void description(QPConnection *c, bool revised) const;
 	void users(QPConnection *c) const;
@@ -125,6 +125,7 @@ public:
 	inline qint32 population() const { return mConnections.size(); }
 	inline QPConnection* user(qint32 i) const { return mConnections[i]; }
 public slots:
+	void handleBlowThru(const QPRoom *r, QPBlowThru *blow);
 	void handleUserJoined(const QPRoom *r, QPConnection *c);
 	void handleUserLeft(const QPRoom *r, QPConnection *c);
 	void handleUserMoved(const QPRoom *r, const QPConnection *c);

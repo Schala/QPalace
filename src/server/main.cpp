@@ -33,14 +33,13 @@ void generateSettings(QJsonObject &data)
 	data["enforceLogonPassword"] = false;
 	data["logChat"] = true;
 	data["disableWhispering"] = false;
-    data["maxThreadCount"] = 5;
-	data["lobbyRoomId"] = 86;
+	data["maxThreadCount"] = 5;
 }
 
 int main(int argc, char *argv[])
 {
 	QCoreApplication app(argc, argv);
-	app.setApplicationName("QPalace Server");
+	app.setApplicationName("QPServer");
 	app.setApplicationVersion("0.0");
 	app.setOrganizationDomain("https://github.com/Schala/QPalace");
 	

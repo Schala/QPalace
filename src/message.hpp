@@ -92,8 +92,9 @@ public:
 	inline quint32 id() const { return mId; }
 	inline quint32 size() const { return (quint32)mData.size(); }
 	inline qint32 ref() const { return mRef; }
+	inline void setRef(qint32 i) { mRef = i; }
 	inline const char* data() const { return mData; }
-	void setData(const QByteArray &data) { mData = data; }
+	inline QPMessage& operator=(const QByteArray &data) { mData = data; return *this; }
 #ifndef QT_NO_DEBUG
 	void dump() const;
 #endif // QT_NO_DEBUG

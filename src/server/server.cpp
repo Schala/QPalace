@@ -1,12 +1,12 @@
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
+#include <QSqlQuery>
 #include <QStandardPaths>
 #include <QThreadPool>
 #include "../crypt.hpp"
 #include "server.hpp"
 
-static QString dbPath = QStandardPaths::standardLocations(QStandardPaths::DataLocation)[0] + (char*)"/qserver.db";
 static const char genPwdAsc[] = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 static const char roomTableDefault[] = "CREATE TABLE room(id INTEGER PRIMARY KEY, \
@@ -33,18 +33,19 @@ QPServer::QPServer(QObject *parent): QObject(parent), mUserCount(0)
 	mOptions = AllowGuests;
 	mAccessFlags = TrackLogoff;
 	mServer = new QTcpServer(this);
-	mLastRoomId = mLobbyId;
+	mLastRoomId = 0;
 	connect(mServer, SIGNAL(newConnection()), this, SLOT(handleNewConnection()));
 	
-	QStringList dataloc = QStandardPaths::standardLocations(QStandardPaths::DataLocation);
-    QDir dir = dataloc[0];
+	QString dbPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation)+"/qpserver.db";
+	QString dataloc = QStandardPaths::writableLocation(QStandardPaths::DataLocation);
+	QDir dir = dataloc;
 	if (!dir.exists())
-		if (!dir.mkpath(dataloc[0]))
+		if (!dir.mkpath(dataloc))
 			qFatal("Unable to make path %s", qPrintable(dataloc[0]));
 	QFile dbFile(dbPath);
 	
 	if (!dbFile.exists())
-		generateDefaultDb();
+		generateDefaultDb(dbPath);
 	else
 	{
 		mDb.setDatabaseName(dbPath);
@@ -78,12 +79,13 @@ bool QPServer::loadDb()
 	while (q.next())
 	{
 		qint16 roomId = (qint16)q.value("id").toInt();
-		mRooms.append(new QPRoom(q, roomId));
-		mRoomLut[roomId] = mRooms.size()-1;
+		mRooms.append(new QPRoom(roomId));
+		mRoomLut[roomId] = mRooms.last();
 	}
 	connect(this, SIGNAL(userJoinedRoom(const QPRoom*,QPConnection*)), mRooms.last(), SLOT(handleUserJoined(const QPRoom*,QPConnection*)));
 	connect(this, SIGNAL(userLeftRoom(const QPRoom*,QPConnection*)), mRooms.last(), SLOT(handleUserLeft(const QPRoom*,QPConnection*)));
 	connect(this, SIGNAL(userMoved(const QPRoom*,const QPConnection*)), mRooms.last(), SLOT(handleUserMoved(const QPRoom*,const QPConnection*)));
+	connect(this, SIGNAL(roomBlowThru(const QPRoom*,QPBlowThru*)), mRooms.last(), SLOT(handleBlowThru(const QPRoom*,QPBlowThru*)));
 	return true;
 }
 
@@ -103,7 +105,6 @@ bool QPServer::loadConf(const QJsonObject &data)
 	mName = data["name"].toString().toLatin1();
 	mPort = (quint16)data["port"].toInt();
 	mMediaUrl = data["mediaUrl"].toString().toLatin1();
-	mLobbyId = (qint16)data["lobbyRoomId"].toInt();
 	int maxThreadCount = data["maxThreadCount"].toInt();
 	if (maxThreadCount > 0)
 		QThreadPool::globalInstance()->setMaxThreadCount(maxThreadCount);
@@ -145,9 +146,9 @@ bool QPServer::loadConf(const QJsonObject &data)
 	return true;
 }
 
-QSqlError QPServer::generateDefaultDb()
+QSqlError QPServer::generateDefaultDb(QString path)
 {
-	mDb.setDatabaseName(dbPath);
+	mDb.setDatabaseName(path);
 	if (!mDb.open())
 		return mDb.lastError();
 	
@@ -163,15 +164,15 @@ QSqlError QPServer::generateDefaultDb()
 	if (!q.exec(imageTableDefault))
 		return mDb.lastError();
 	
-	createRoom(q, "Lobby", QPRoom::DropZone, "lobby.png");
+	createRoom("Lobby", QPRoom::DropZone, "lobby.png");
 	
 	qDebug("`qpserver.db` was not available, so it has been generated.\n");
-	generatePassword(q, true);
+	generatePassword(true);
 	
 	return QSqlError();
 }
 
-void QPServer::generatePassword(QSqlQuery &q, bool god)
+void QPServer::generatePassword(bool god)
 {
 	char *pwd = new char[8];
 	pwd[7] = '\0';
@@ -180,17 +181,17 @@ void QPServer::generatePassword(QSqlQuery &q, bool god)
 	for (quint8 i = 0; i < 7; i++)
 		pwd[i] = genPwdAsc[qrand() % qstrlen(genPwdAsc)];
 	
-	createPassword(q, pwd, god ? PWD_GOD : 0);
+	createPassword(pwd, god ? PWD_GOD : 0);
 	qDebug("Your generated password is '%s' and will be overriden once a new password is set. You are recommended to write this down, as it is unobtainable once this message is cleared!\n", pwd);
 	delete[] pwd;
 }
 
-QVariant QPServer::createRoom(QSqlQuery &q, const QString &name, qint32 flags,
-	const QString &bg, const char *pwd, const QString &artist)
+QVariant QPServer::createRoom(const QString &name, qint32 flags, const QString &bg, const char *pwd, const QString &artist)
 {
+	QSqlQuery q;
 	q.prepare("INSERT INTO room(id, name, flags, img_name, artist_name, password) VALUES(?, ?, ?, ?, ?, ?)");
 	
-	q.addBindValue(mLastRoomId);
+	q.addBindValue(++mLastRoomId);
 	q.addBindValue(name);
 	q.addBindValue(flags);
 	q.addBindValue(bg);
@@ -207,17 +208,21 @@ QVariant QPServer::createRoom(QSqlQuery &q, const QString &name, qint32 flags,
 		q.addBindValue(QVariant(QVariant::ByteArray));
 	
 	q.exec();
-	mRooms[mRooms.size()-1] = new QPRoom(q, mLastRoomId);
-	mRoomLut[mLastRoomId] = mRooms.size()-1;
-	mLastRoomId++;
+	mRooms.append(new QPRoom(mLastRoomId));
+	mRoomLut[mLastRoomId] = mRooms.last();
+	connect(this, SIGNAL(userJoinedRoom(const QPRoom*,QPConnection*)), mRooms.last(), SLOT(handleUserJoined(const QPRoom*,QPConnection*)));
+	connect(this, SIGNAL(userLeftRoom(const QPRoom*,QPConnection*)), mRooms.last(), SLOT(handleUserLeft(const QPRoom*,QPConnection*)));
+	connect(this, SIGNAL(userMoved(const QPRoom*,const QPConnection*)), mRooms.last(), SLOT(handleUserMoved(const QPRoom*,const QPConnection*)));
+	connect(this, SIGNAL(roomBlowThru(const QPRoom*,QPBlowThru*)), mRooms.last(), SLOT(handleBlowThru(const QPRoom*,QPBlowThru*)));
 	return q.lastInsertId();
 }
 
-QVariant QPServer::createPassword(QSqlQuery &q, const char *pwd, quint8 flags)
+QVariant QPServer::createPassword(const char *pwd, quint8 flags)
 {
 	QByteArray encPwd(pwd);
 	QPCrypt crypt;
 	
+	QSqlQuery q;
 	q.prepare("INSERT INTO password(flags, checksum) VALUES(?, ?)");
 	q.addBindValue(flags);
 	
@@ -240,8 +245,8 @@ void QPServer::tiyid(QPConnection *c)
 
 void QPServer::logon(QPConnection *c, QPMessage &msg)
 {
-	QByteArray lba(msg.data(), msg.size());
-	QDataStream ds(lba);
+	QByteArray ba(msg.data(), msg.size());
+	QDataStream ds(ba);
 	ds.device()->reset();
 	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 
@@ -283,7 +288,7 @@ void QPServer::logon(QPConnection *c, QPMessage &msg)
 
 void QPServer::version(QDataStream &ds)
 {
-	QPMessage version(QPMessage::vers, 0x00010016);
+	QPMessage version(QPMessage::vers, 0x00010016); // version number was packet sniffed from PServer 4.4
 	ds << version;
 }
 
@@ -300,7 +305,7 @@ void QPServer::info(QDataStream &ds, QPConnection *c)
 	ds1.writeRawData(mName, slen);
 	ds1 << mOptions << mUlCaps << mDlCaps;
 	
-	sinfo.setData(ba);
+	sinfo = ba;
 	ds << sinfo;
 }
 
@@ -314,7 +319,7 @@ void QPServer::userStatus(QDataStream &ds, QPConnection *c)
 	
 	ds1 << c->status();
 	
-	ustatus.setData(ba);
+	ustatus = ba;
 	ds << ustatus;
 }
 
@@ -328,7 +333,7 @@ void QPServer::userLog(QDataStream &ds, QPConnection *c)
 	
 	ds1 << mUserCount;
 	
-	ulog.setData(ba);
+	ulog = ba;
 	ds << ulog;
 }
 
@@ -343,20 +348,50 @@ void QPServer::mediaUrl(QDataStream &ds, QPConnection *c)
 	ds1.writeRawData(mMediaUrl.data(), mMediaUrl.size());
 	ds1 << (quint8)0;
 	
-	http.setData(ba);
+	http = ba;
 	ds << http;
 }
 
 void QPServer::userMove(QPConnection *c, QPMessage &msg)
 {
-	QByteArray lba(msg.data(), msg.size());
-	QDataStream ds(lba);
+	QByteArray ba(msg.data(), msg.size());
+	QDataStream ds(ba);
 	ds.device()->reset();
 	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 
 	qint16 x, y;
 	ds >> x >> y;
 	c->setPosition(x, y);
+}
+
+QPBlowThru* QPServer::blowThru(QPMessage &msg)
+{
+	QPBlowThru *blow = new QPBlowThru();
+	msg >> blow;
+	return blow;
+}
+
+void QPServer::blowThru(QPBlowThru *blow)
+{
+	QPMessage msg(QPMessage::blow);
+	msg << blow;
+
+	if (blow->userCount() == QPBlowThru::Global)
+		for (auto c: mConnections)
+		{
+			QDataStream ds(c->socket());
+			ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+			ds << msg;
+		}
+	else
+		for (qint32 i = 0; i < blow->userCount(); i++)
+		{
+			QDataStream ds(mUserLut[blow->user(i)]->socket());
+			ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+			ds << msg;
+		}
+
+	delete blow;
 }
 
 void QPServer::handleNewConnection()
@@ -395,7 +430,8 @@ void QPServer::handleReadyRead()
 			logon(c, msg);
 			if ((mAccessFlags & AllowInsecureClients) || c->isSecureVendor())
 			{
-				mConnections.push_back(c);
+				mConnections.append(c);
+				mUserLut[c->id()] = c;
 				qDebug("[%s] %s logged in from %s using %s client on %s.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
 					c->userName(), qPrintable(c->socket()->peerAddress().toString()), QPConnection::vendorToString(c->vendor()),
 					c->osToString());
@@ -414,27 +450,40 @@ void QPServer::handleReadyRead()
 			c->setFace(qrand() % 16);
 			c->setColor(qrand() % 16);
 			c->setPosition(0, 0); // placeholder, todo: fetch room bg width/height and randomise pos
-			c->setRoom(mLobbyId);
+			c->setRoom(1);
+			c->setStatus(0);
 
 			version(ds);
 			info(ds, c);
 			userStatus(ds, c);
 			userLog(ds, c);
 			mediaUrl(ds, c);
-			mRooms[mRoomLut[c->room()]]->description(c, false);
-			mRooms[mRoomLut[c->room()]]->users(c);
-			emit userJoinedRoom(mRooms[mRoomLut[c->room()]], c);
+			mRoomLut[c->room()]->description(c, false);
+			mRoomLut[c->room()]->users(c);
+			emit userJoinedRoom(mRoomLut[c->room()], c);
+
 			break;
 		}
 		case QPMessage::sRom:
 		{
-			emit roomEdited(mRooms[mRoomLut[c->room()]]);
+			emit roomEdited(mRoomLut[c->room()]);
 			break;
 		}
 		case QPMessage::uLoc:
 		{
 			userMove(c, msg);
-			emit userMoved(mRooms[mRoomLut[c->room()]], c);
+			emit userMoved(mRoomLut[c->room()], c);
+			break;
+		}
+		case QPMessage::blow:
+		{
+			QPBlowThru *blow = blowThru(msg);
+
+			if (blow->userCount() == QPBlowThru::Local)
+				emit roomBlowThru(mRoomLut[c->room()], blow);
+			else
+				blowThru(blow);
+
 			break;
 		}
 		default:
