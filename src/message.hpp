@@ -50,7 +50,7 @@ public:
 		rAst = 0x72417374,
 		rLst = 0x724c7474,
 		regi = 0x72656769,
-		rep2 = 0x72657032, // legacy, unused in server
+		rep2 = 0x72657032, // legacy, unused in server, ignored by client
 		resp = 0x72657370, // ?
 		rmsg = 0x726d7367,
 		room = 0x726f6f6d,
@@ -90,6 +90,7 @@ public:
 	QPMessage(): mId(NOOP), mRef(0) {}
 	QPMessage(quint32 id, qint32 ref = 0): mId(id), mRef(ref) {}
 	inline quint32 id() const { return mId; }
+	inline void setId(quint32 i) { mId = i; }
 	inline quint32 size() const { return (quint32)mData.size(); }
 	inline qint32 ref() const { return mRef; }
 	inline void setRef(qint32 i) { mRef = i; }

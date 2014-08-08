@@ -620,21 +620,20 @@ void QPRoom::handleUserMoved(const QPRoom *r, const QPConnection *c)
 {
 	if (this == r)
 	{
-		QPMessage umove(QPMessage::uLoc, c->id());
+		QPMessage msg(QPMessage::uLoc, c->id());
 		QByteArray ba;
 		QDataStream ds1(&ba, QIODevice::WriteOnly);
 		ds1.device()->reset();
 		ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 
 		ds1 << c->position().x << c->position().y;
-
-		umove = ba;
+		msg = ba;
 
 		for (auto p: mConnections)
 		{
 			QDataStream ds(p->socket());
 			ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-			ds << umove;
+			ds << msg;
 		}
 	}
 }
@@ -655,4 +654,15 @@ void QPRoom::handleBlowThru(const QPRoom *r, QPBlowThru *blow)
 
 		delete blow;
 	}
+}
+
+void QPRoom::handleUserTalked(const QPRoom *r, QPMessage &msg)
+{
+	if (this == r)
+		for (auto p: mConnections)
+		{
+			QDataStream ds(p->socket());
+			ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+			ds << msg;
+		}
 }

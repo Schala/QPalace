@@ -44,7 +44,9 @@ public:
 		Ruby,
 		Flash,
 		Web,
-		OSMask = 0x000000ff,
+		OSMask = 0xff,
+		Utf8 = 0x100,
+		EncodingMask = 0xff00,
 		Authenticate = 0x80000000
 	};
 	enum class Vendor: quint8
@@ -59,15 +61,15 @@ public:
 	};
 	enum
 	{
-		SuperUser = 0x0001,
+		SuperUser = 0x1,
 		God,
-		Kill = 0x0004,
-		CommError = 0x0040,
-		Gag = 0x0080,
-		Pin = 0x0100,
-		Hide = 0x0200,
-		RejectEsp = 0x0400,
-		RejectPrivate = 0x0800,
+		Kill = 0x4,
+		CommError = 0x40,
+		Gag = 0x80,
+		Pin = 0x100,
+		Hide = 0x200,
+		RejectEsp = 0x400,
+		RejectPrivate = 0x800,
 		PropGag = 0x1000
 	};
 #ifdef SERVER

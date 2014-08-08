@@ -34,6 +34,7 @@ void generateSettings(QJsonObject &data)
 	data["logChat"] = true;
 	data["disableWhispering"] = false;
 	data["maxThreadCount"] = 5;
+	data["unicodeEnabled"] = true;
 }
 
 int main(int argc, char *argv[])

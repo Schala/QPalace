@@ -38,13 +38,13 @@ QPRegistration::QPRegistration()
 void QPRegistration::computeCrc(quint32 seed)
 {
 	mCrc = 0xa95ade76;
-	quint32 current_byte;
+	quint32 currentByte;
 	seed = qToBigEndian(seed);
 	
 	for (quint8 i = 0; i < 4; i++)
 	{
-		current_byte = seed & 0xff;
-		mCrc = ((mCrc << 1) | (((mCrc & 0x80000000) == 0) ? 0 : 1)) ^ crcMask[current_byte];
+		currentByte = seed & 0xff;
+		mCrc = ((mCrc << 1) | (((mCrc & 0x80000000) == 0) ? 0 : 1)) ^ crcMask[currentByte];
 		seed >>= 8;
 	}
 }
@@ -53,7 +53,7 @@ QPRegistration::QPRegistration(const char *regcode)
 {
 	QString code = regcode;
 	QRegExp rx("[^ABCDEFGHJKLMNPQRSTUVWXYZ23456789]");
-	qint32 nbits = 64, sn = 0, ocnt = 0, mask = 0x0080, charidx = 0, pos = 0;
+	qint32 nbits = 64, sn = 0, ocnt = 0, mask = 0x80, charIdx = 0, pos = 0;
 	quint32 temp = 0;
 	QByteArray s(8, 0);
 	
@@ -64,7 +64,7 @@ QPRegistration::QPRegistration(const char *regcode)
 	{
 		if (ocnt == 0)
 		{
-			sn = codeAsc.indexOf(code.at(charidx++));
+			sn = codeAsc.indexOf(code.at(charIdx++));
 			ocnt = 5;
 		}
 		if (sn & 0x10)

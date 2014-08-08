@@ -4,7 +4,6 @@
 #include <QSqlQuery>
 #include <QStandardPaths>
 #include <QThreadPool>
-#include "../crypt.hpp"
 #include "server.hpp"
 
 static const char genPwdAsc[] = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -81,11 +80,12 @@ bool QPServer::loadDb()
 		qint16 roomId = (qint16)q.value("id").toInt();
 		mRooms.append(new QPRoom(roomId));
 		mRoomLut[roomId] = mRooms.last();
+		connect(this, SIGNAL(userJoinedRoom(const QPRoom*,QPConnection*)), mRooms.last(), SLOT(handleUserJoined(const QPRoom*,QPConnection*)));
+		connect(this, SIGNAL(userLeftRoom(const QPRoom*,QPConnection*)), mRooms.last(), SLOT(handleUserLeft(const QPRoom*,QPConnection*)));
+		connect(this, SIGNAL(userMoved(const QPRoom*,const QPConnection*)), mRooms.last(), SLOT(handleUserMoved(const QPRoom*,const QPConnection*)));
+		connect(this, SIGNAL(roomBlowThru(const QPRoom*,QPBlowThru*)), mRooms.last(), SLOT(handleBlowThru(const QPRoom*,QPBlowThru*)));
+		connect(this, SIGNAL(userTalked(const QPRoom*,QPMessage&)), mRooms.last(), SLOT(handleUserTalked(const QPRoom*,QPMessage&)));
 	}
-	connect(this, SIGNAL(userJoinedRoom(const QPRoom*,QPConnection*)), mRooms.last(), SLOT(handleUserJoined(const QPRoom*,QPConnection*)));
-	connect(this, SIGNAL(userLeftRoom(const QPRoom*,QPConnection*)), mRooms.last(), SLOT(handleUserLeft(const QPRoom*,QPConnection*)));
-	connect(this, SIGNAL(userMoved(const QPRoom*,const QPConnection*)), mRooms.last(), SLOT(handleUserMoved(const QPRoom*,const QPConnection*)));
-	connect(this, SIGNAL(roomBlowThru(const QPRoom*,QPBlowThru*)), mRooms.last(), SLOT(handleBlowThru(const QPRoom*,QPBlowThru*)));
 	return true;
 }
 
@@ -142,6 +142,8 @@ bool QPServer::loadConf(const QJsonObject &data)
 		mOptions |= ChatLog;
 	if (data["disableWhispering"].toBool())
 		mOptions |= NoWhisper;
+	if (data["unicodeEnabled"].toBool())
+		mOptions |= Unicode;
 	
 	return true;
 }
@@ -200,8 +202,7 @@ QVariant QPServer::createRoom(const QString &name, qint32 flags, const QString &
 	if (pwd)
 	{
 		QByteArray encPwd(pwd);
-		QPCrypt crypt;
-		crypt.encrypt(encPwd.data(), encPwd.size());
+		mCrypt.encrypt(encPwd.data(), encPwd.size());
 		q.addBindValue(encPwd);
 	}
 	else
@@ -226,7 +227,7 @@ QVariant QPServer::createPassword(const char *pwd, quint8 flags)
 	q.prepare("INSERT INTO password(flags, checksum) VALUES(?, ?)");
 	q.addBindValue(flags);
 	
-	crypt.encrypt(encPwd.data(), encPwd.size());
+	mCrypt.encrypt(encPwd.data(), encPwd.size());
 	QString pwHash(QCryptographicHash::hash(encPwd, QCryptographicHash::Sha256).toHex());
 	q.addBindValue(pwHash);
 	
@@ -286,12 +287,6 @@ void QPServer::logon(QPConnection *c, QPMessage &msg)
 	ds.skipRawData(24); // unused data
 }
 
-void QPServer::version(QDataStream &ds)
-{
-	QPMessage version(QPMessage::vers, 0x00010016); // version number was packet sniffed from PServer 4.4
-	ds << version;
-}
-
 void QPServer::info(QDataStream &ds, QPConnection *c)
 {
 	QPMessage sinfo(QPMessage::sinf, c->id());
@@ -303,7 +298,7 @@ void QPServer::info(QDataStream &ds, QPConnection *c)
 	quint8 slen = (quint8)qstrlen(mName);
 	ds1 << mAccessFlags << slen;
 	ds1.writeRawData(mName, slen);
-	ds1 << mOptions << mUlCaps << mDlCaps;
+	// according to packets, options, ul/dl caps aren't sent?
 	
 	sinfo = ba;
 	ds << sinfo;
@@ -364,13 +359,6 @@ void QPServer::userMove(QPConnection *c, QPMessage &msg)
 	c->setPosition(x, y);
 }
 
-QPBlowThru* QPServer::blowThru(QPMessage &msg)
-{
-	QPBlowThru *blow = new QPBlowThru();
-	msg >> blow;
-	return blow;
-}
-
 void QPServer::blowThru(QPBlowThru *blow)
 {
 	QPMessage msg(QPMessage::blow);
@@ -392,6 +380,28 @@ void QPServer::blowThru(QPBlowThru *blow)
 		}
 
 	delete blow;
+}
+
+void QPServer::userTalk(const QPConnection *c, QPMessage &msg)
+{
+	QByteArray ba(msg.data(), msg.size());
+	QDataStream ds(ba);
+	ds.device()->reset();
+	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+	qint16 len;
+	ds >> len;
+	len -= 2; // 2 extra null chars ?
+	char text[len];
+	ds.readRawData(text, len);
+
+	if (mOptions & ChatLog)
+	{
+		mCrypt.decrypt(text, len-1);
+		qDebug("[%s] %s: %s", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")), c->userName(),
+			text);
+		mCrypt.encrypt(text, len-1);
+	}
 }
 
 void QPServer::handleNewConnection()
@@ -453,7 +463,9 @@ void QPServer::handleReadyRead()
 			c->setRoom(1);
 			c->setStatus(0);
 
-			version(ds);
+			QPMessage version(QPMessage::vers, 0x00010016); // version number was packet sniffed from PServer 4.5.1
+			ds << version;
+
 			info(ds, c);
 			userStatus(ds, c);
 			userLog(ds, c);
@@ -477,13 +489,24 @@ void QPServer::handleReadyRead()
 		}
 		case QPMessage::blow:
 		{
-			QPBlowThru *blow = blowThru(msg);
-
+			QPBlowThru *blow = new QPBlowThru();
+			msg >> blow;
 			if (blow->userCount() == QPBlowThru::Local)
 				emit roomBlowThru(mRoomLut[c->room()], blow);
 			else
 				blowThru(blow);
-
+			break;
+		}
+		case QPMessage::xtlk:
+		{
+			userTalk(c, msg);
+			emit userTalked(mRoomLut[c->room()], msg);
+			break;
+		}
+		case QPMessage::ping:
+		{
+			msg.setId(QPMessage::pong);
+			ds << msg;
 			break;
 		}
 		default:

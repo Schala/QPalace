@@ -29,31 +29,31 @@ struct QPScriptEvent final
 {
 	enum
 	{
-		Select = 0x00000001,
-		Lock = 0x00000002,
-		Unlock = 0x00000004,
-		Hide = 0x00000008,
-		Show = 0x00000010,
-		Startup = 0x00000020,
-		Alarm = 0x00000040,
-		Custom = 0x00000080,
-		InChat = 0x00000100,
-		PropChange = 0x00000200,
-		Enter = 0x00000400,
-		Leave = 0x00000800,
-		OutChat = 0x00001000,
-		SignOn = 0x00002000,
-		SignOff = 0x00004000,
-		Macro0 = 0x00008000,
-		Macro1 = 0x00010000,
-		Macro2 = 0x00020000,
-		Macro3 = 0x00040000,
-		Macro4 = 0x00080000,
-		Macro5 = 0x00100000,
-		Macro6 = 0x00200000,
-		Macro7 = 0x00400000,
-		Macro8 = 0x00800000,
-		Macro9 = 0x01000000
+		Select = 0x1,
+		Lock = 0x2,
+		Unlock = 0x4,
+		Hide = 0x8,
+		Show = 0x10,
+		Startup = 0x20,
+		Alarm = 0x40,
+		Custom = 0x80,
+		InChat = 0x100,
+		PropChange = 0x200,
+		Enter = 0x400,
+		Leave = 0x800,
+		OutChat = 0x1000,
+		SignOn = 0x2000,
+		SignOff = 0x4000,
+		Macro0 = 0x8000,
+		Macro1 = 0x10000,
+		Macro2 = 0x20000,
+		Macro3 = 0x40000,
+		Macro4 = 0x80000,
+		Macro5 = 0x100000,
+		Macro6 = 0x200000,
+		Macro7 = 0x400000,
+		Macro8 = 0x800000,
+		Macro9 = 0x1000000
 	};
 };
 
@@ -139,15 +139,15 @@ class QPRoom final: public QObject
 public:
 	enum
 	{
-		AuthorLocked = 0x0001,
-		Private = 0x0002,
-		NoPainting = 0x0004,
-		Closed = 0x0008,
-		NoCyborgs = 0x0010,
-		Hidden = 0x0020,
-		NoGuests = 0x0040,
-		WizardsOnly = 0x0080,
-		DropZone = 0x0100
+		AuthorLocked = 0x1,
+		Private = 0x2,
+		NoPainting = 0x4,
+		Closed = 0x8,
+		NoCyborgs = 0x10,
+		Hidden = 0x20,
+		NoGuests = 0x40,
+		WizardsOnly = 0x80,
+		DropZone = 0x100
 	};
 #ifdef SERVER
 	QPRoom(qint16 id);
@@ -168,6 +168,7 @@ public slots:
 	void handleUserJoined(const QPRoom *r, QPConnection *c);
 	void handleUserLeft(const QPRoom *r, QPConnection *c);
 	void handleUserMoved(const QPRoom *r, const QPConnection *c);
+	void handleUserTalked(const QPRoom *r, QPMessage &msg);
 private:
 	QVector<QPConnection*> mConnections;
 	QByteArray mName, mImgName, mArtistName, mPwd;

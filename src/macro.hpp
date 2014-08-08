@@ -49,15 +49,6 @@ enum {
 };
 
 enum {
-	DC_PATH = 0,
-	DC_SHAPE,
-	DC_TEXT,
-	DC_DETONATE,
-	DC_DELETE,
-	DC_ELLIPSE
-};
-
-enum {
 	PLAT_MACINTOSH = 0,
 	PLAT_WINDOWS95,
 	PLAT_WINDOWSNT,

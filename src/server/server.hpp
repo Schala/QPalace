@@ -14,6 +14,7 @@
 
 #include "../blowthru.hpp"
 #include "../connection.hpp"
+#include "../crypt.hpp"
 #include "../message.hpp"
 #include "../room.hpp"
 
@@ -23,46 +24,34 @@ class QPServer final: public QObject
 public:
 	enum
 	{
-		AllowGuests = 0x0001,
+		AllowGuests = 0x1,
 		AllowCyborgs,
-		AllowPainting = 0x0004,
-		AllowCustomProps = 0x0008,
-		AllowWizards = 0x0010,
-		WizardsMayKill = 0x0020,
-		WizardsMayAuthor = 0x0040,
-		PlayersMayKill = 0x0080,
-		CyborgsMayKill = 0x0100,
-		DeathPenalty = 0x0200,
-		PurgeInactiveProps = 0x0400,
-		KillFlooders = 0x0800,
+		AllowPainting = 0x4,
+		AllowCustomProps = 0x8,
+		AllowWizards = 0x10,
+		WizardsMayKill = 0x20,
+		WizardsMayAuthor = 0x40,
+		PlayersMayKill = 0x80,
+		CyborgsMayKill = 0x100,
+		DeathPenalty = 0x200,
+		PurgeInactiveProps = 0x400,
+		KillFlooders = 0x800,
 		NoSpoofing = 0x1000,
 		UserCreatedRooms = 0x2000,
 		AllowInsecureClients = 0x4000
 	};
 	enum
 	{
-		PasswordSecurity = 0x00000002,
-		ChatLog = 0x00000004,
-		NoWhisper = 0x00000008,
-		Authenticate = 0x00000020,
-		PoundProtect = 0x00000040, // employs heuristics to evade hackers?
-		SortOptions = 0x00000080, // ?
-		TrackLogoff = 0x00000100,
-		JavaSecure = 0x00000200,
-		FlashSecure = 0x00000800 // new addition, but unused due to port limitations
-	};
-	enum
-	{
-		PalaceAssets = 0x00000001,
-		FtpAssets,
-		HttpAssets = 0x00000004,
-		OtherAssets = 0x00000008,
-		PalaceFiles = 0x00000010,
-		FtpFiles = 0x00000020,
-		HttpFiles = 0x00000040,
-		OtherFiles = 0x00000080,
-		ExtendUploadPacket = 0x00000100,
-		ExtendDownloadPacket = 0x00000200
+		PasswordSecurity = 0x2,
+		ChatLog = 0x4,
+		NoWhisper = 0x8,
+		Authenticate = 0x20,
+		PoundProtect = 0x40, // employs heuristics to evade hackers?
+		SortOptions = 0x80, // ?
+		TrackLogoff = 0x100,
+		JavaSecure = 0x200,
+		FlashSecure = 0x400, // new addition, but unused due to port limitations
+		Unicode = 0x800
 	};
 	QPServer(QObject *parent = nullptr);
 	~QPServer();
@@ -81,10 +70,13 @@ signals:
 	void userLoggedOn(const QPConnection *c);
 	void userLoggedOff(const QPConnection *c);
 	void userMoved(const QPRoom *r, const QPConnection *c);
+	void userDrew(const QPRoom *r, const QPConnection *c, QPDraw *draw);
+	void userTalked(const QPRoom *r, QPMessage &msg);
 private slots:
 	void handleNewConnection();
 	void handleReadyRead();
 private:
+	QPCrypt mCrypt;
 	QVector<QPRoom*> mRooms;
 	QHash<qint32, QPConnection*> mUserLut;
 	QHash<qint16, QPRoom*> mRoomLut;
@@ -92,7 +84,7 @@ private:
 	QSqlDatabase mDb;
 	QTcpServer *mServer;
 	QByteArray mName, mMediaUrl;
-	quint32 mOptions, mDlCaps, mUlCaps;
+	quint32 mOptions;
 	qint32 mAccessFlags, mUserCount; // for ID assignment
 	quint16 mPort;
 	qint16 mLastRoomId; // for ID assignment
@@ -102,14 +94,13 @@ private:
 	void generatePassword(bool god = false);
 	void tiyid(QPConnection *c);
 	void logon(QPConnection *c, QPMessage &msg);
-	void version(QDataStream &ds);
 	void info(QDataStream &ds, QPConnection *c);
 	void userStatus(QDataStream &ds, QPConnection *c);
 	void userLog(QDataStream &ds, QPConnection *c);
 	void mediaUrl(QDataStream &ds, QPConnection *c);
 	void userMove(QPConnection *c, QPMessage &msg);
-	QPBlowThru* blowThru(QPMessage &msg);
 	void blowThru(QPBlowThru *blow);
+	void userTalk(const QPConnection *c, QPMessage &msg);
 };
 
 #endif // _SERVER_H

@@ -11,6 +11,51 @@ Known Bugs (server)
 ===================
 * LinPal tends to crash when sending a USERMOVE packet
 * PChat's user occupance text in its main window displays an anomaly with multiple users (ie. "Users: 2/1")
+* Palace32 disconnects immediately upon connection attempt with log message "denied by server"
+
+To do (server)
+==============
+- asset query
+- asset regi
+- asset send
+- authenticate
+- auth response
+- display url
+- door lock
+- door unlock
+- finish draw
+- extended info
+- file not found
+- file query
+- file send
+- global message
+- kill user
+- room list
+- user list
+- logoff
+- nav error
+- pict move
+- prop del
+- prop move
+- prop new
+- room message
+- room goto
+- room new
+- server down
+- superuser message
+- spot del
+- spot move
+- spot new
+- spot state
+- superuser
+- talk
+- user color
+- user desc
+- user face
+- user name
+- user prop
+- whisper
+- x whisper
 
 Future requirements (pending)
 =============================
