@@ -10,7 +10,6 @@ Requirements
 Known Bugs (server)
 ===================
 * LinPal tends to crash when sending a USERMOVE packet
-* PChat's user occupance text in its main window displays an anomaly with multiple users (ie. "Users: 2/1")
 * Palace32 disconnects immediately upon connection attempt with log message "denied by server"
 
 To do (server)
@@ -32,7 +31,6 @@ To do (server)
 - kill user
 - room list
 - user list
-- logoff
 - nav error
 - pict move
 - prop del

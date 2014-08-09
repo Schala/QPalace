@@ -235,75 +235,6 @@ QVariant QPServer::createPassword(const char *pwd, quint8 flags)
 	return q.lastInsertId();
 }
 
-void QPServer::tiyid(QPConnection *c)
-{
-	QPMessage tiyid(QPMessage::tiyr, ++mUserCount);
-	QDataStream ds(c->socket());
-	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-	ds << tiyid;
-	c->setId(mUserCount);
-}
-
-void QPServer::logon(QPConnection *c, QPMessage &msg)
-{
-	QByteArray ba(msg.data(), msg.size());
-	QDataStream ds(ba);
-	ds.device()->reset();
-	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-
-	ds.skipRawData(9); // 8 bits of legacy data; also discard length byte, QByteArray will auto determine
-	char *idstr = new char[31];
-	ds.readRawData(idstr, 31);
-	c->setUserName(idstr);
-	delete[] idstr;
-
-	quint8 slen;
-	ds >> slen; // encrypted password might have null chars
-	if (slen)
-	{
-		idstr = new char[slen];
-		ds.readRawData(idstr, slen);
-		c->setWizardPassword(idstr, slen);
-		delete[] idstr;
-	}
-	ds.skipRawData(31 - slen);
-
-	qint32 flags;
-	ds >> flags;
-	c->setAuxFlags(flags);
-
-	ds.skipRawData(20); // legacy data
-
-	qint16 roomId;
-	ds >> roomId;
-	c->setRoom(roomId);
-
-	idstr = new char[7];
-	idstr[6] = '\0';
-	ds.readRawData(idstr, 6);
-	c->setVendor(QPConnection::vendorFromString(idstr));
-	delete[] idstr;
-
-	ds.skipRawData(24); // unused data
-}
-
-void QPServer::info(QDataStream &ds, QPConnection *c)
-{
-	QPMessage sinfo(QPMessage::sinf, c->id());
-	QByteArray ba;
-	QDataStream ds1(&ba, QIODevice::WriteOnly);
-	ds1.device()->reset();
-	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-	
-	quint8 slen = (quint8)qstrlen(mName);
-	ds1 << mAccessFlags << slen;
-	ds1.writeRawData(mName, slen);
-	// according to packets, options, ul/dl caps aren't sent?
-	
-	sinfo = ba;
-	ds << sinfo;
-}
-
 void QPServer::userStatus(QDataStream &ds, QPConnection *c)
 {
 	QPMessage ustatus(QPMessage::uSta, c->id());
@@ -316,20 +247,6 @@ void QPServer::userStatus(QDataStream &ds, QPConnection *c)
 	
 	ustatus = ba;
 	ds << ustatus;
-}
-
-void QPServer::userLog(QDataStream &ds, QPConnection *c)
-{
-	QPMessage ulog(QPMessage::log, c->id());
-	QByteArray ba;
-	QDataStream ds1(&ba, QIODevice::WriteOnly);
-	ds1.device()->reset();
-	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-	
-	ds1 << mUserCount;
-	
-	ulog = ba;
-	ds << ulog;
 }
 
 void QPServer::mediaUrl(QDataStream &ds, QPConnection *c)
@@ -382,34 +299,17 @@ void QPServer::blowThru(QPBlowThru *blow)
 	delete blow;
 }
 
-void QPServer::userTalk(const QPConnection *c, QPMessage &msg)
-{
-	QByteArray ba(msg.data(), msg.size());
-	QDataStream ds(ba);
-	ds.device()->reset();
-	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-
-	qint16 len;
-	ds >> len;
-	len -= 2; // 2 extra null chars ?
-	char text[len];
-	ds.readRawData(text, len);
-
-	if (mOptions & ChatLog)
-	{
-		mCrypt.decrypt(text, len-1);
-		qDebug("[%s] %s: %s", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")), c->userName(),
-			text);
-		mCrypt.encrypt(text, len-1);
-	}
-}
-
 void QPServer::handleNewConnection()
 {
 	QPConnection *c = new QPConnection(mServer->nextPendingConnection());
 	connect(c, SIGNAL(readyRead()), this, SLOT(handleReadyRead()));
 
-	tiyid(c);
+	// MSG_TIYID
+	QPMessage tiyid(QPMessage::tiyr, ++mUserCount);
+	QDataStream ds(c->socket());
+	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+	ds << tiyid;
+	c->setId(mUserCount);
 
 	if (!c->socket()->waitForReadyRead())
 		qDebug("[%s] Connection from %s timed out.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
@@ -437,7 +337,49 @@ void QPServer::handleReadyRead()
 	{
 		case QPMessage::regi:
 		{
-			logon(c, msg);
+			// MSG_LOGON
+			{
+				QByteArray ba(msg.data(), msg.size());
+				QDataStream ds1(ba);
+				ds1.device()->reset();
+				ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+				ds1.skipRawData(9); // 8 bits of legacy data; also discard name length byte, QByteArray will auto determine
+				char *idstr = new char[31];
+				ds1.readRawData(idstr, 31);
+				c->setUserName(idstr);
+				delete[] idstr;
+
+				quint8 slen;
+				ds1 >> slen; // encrypted password might have null chars
+				if (slen)
+				{
+					idstr = new char[slen];
+					ds1.readRawData(idstr, slen);
+					c->setWizardPassword(idstr, slen);
+					delete[] idstr;
+				}
+				ds1.skipRawData(31 - slen);
+
+				qint32 flags;
+				ds1 >> flags;
+				c->setAuxFlags(flags);
+
+				ds1.skipRawData(20); // legacy data
+
+				qint16 roomId;
+				ds1 >> roomId;
+				c->setRoom(roomId);
+
+				idstr = new char[7];
+				idstr[6] = '\0';
+				ds1.readRawData(idstr, 6);
+				c->setVendor(QPConnection::vendorFromString(idstr));
+				delete[] idstr;
+
+				ds1.skipRawData(24); // unused data
+			}
+
 			if ((mAccessFlags & AllowInsecureClients) || c->isSecureVendor())
 			{
 				mConnections.append(c);
@@ -463,12 +405,50 @@ void QPServer::handleReadyRead()
 			c->setRoom(1);
 			c->setStatus(0);
 
-			QPMessage version(QPMessage::vers, 0x00010016); // version number was packet sniffed from PServer 4.5.1
-			ds << version;
+			// MSG_SERVERVERSION
+			{
+				QPMessage version(QPMessage::vers, 0x00010016); // version number was packet sniffed from PServer 4.5.1
+				ds << version;
+			}
 
-			info(ds, c);
+			// MSG_SERVERINFO
+			{
+				QPMessage sinfo(QPMessage::sinf, c->id());
+				QByteArray ba;
+				QDataStream ds1(&ba, QIODevice::WriteOnly);
+				ds1.device()->reset();
+				ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+				quint8 slen = (quint8)qstrlen(mName);
+				ds1 << mAccessFlags << slen;
+				ds1.writeRawData(mName, slen);
+				// according to packet sniffing, options + ul/dl caps aren't sent?
+				sinfo = ba;
+				ds << sinfo;
+			}
+
 			userStatus(ds, c);
-			userLog(ds, c);
+
+			// MSG_USERLOG
+			{
+				QPMessage ulog(QPMessage::log, c->id());
+				QByteArray ba;
+				QDataStream ds1(&ba, QIODevice::WriteOnly);
+				ds1.device()->reset();
+				ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+				ds1 << (qint32)mConnections.size();
+				ulog = ba;
+
+				for (auto u: mConnections)
+				{
+					QDataStream ds2(u->socket());
+					ds2.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+					ds2 << ulog;
+				}
+			}
+
 			mediaUrl(ds, c);
 			mRoomLut[c->room()]->description(c, false);
 			mRoomLut[c->room()]->users(c);
@@ -499,7 +479,23 @@ void QPServer::handleReadyRead()
 		}
 		case QPMessage::xtlk:
 		{
-			userTalk(c, msg);
+			if (mOptions & ChatLog)
+			{
+				QByteArray ba(msg.data(), msg.size());
+				QDataStream ds1(ba);
+				ds1.device()->reset();
+				ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+				qint16 len;
+				ds1 >> len;
+				len -= 2; // 2 extra null chars ?
+				char text[len];
+				ds1.readRawData(text, len);
+				mCrypt.decrypt(text, len-1);
+				qDebug("[%s - %s] %s: %s", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
+					mRoomLut[c->room()]->name(), c->userName(), text);
+				mCrypt.encrypt(text, len-1);
+			}
 			emit userTalked(mRoomLut[c->room()], msg);
 			break;
 		}
@@ -507,6 +503,30 @@ void QPServer::handleReadyRead()
 		{
 			msg.setId(QPMessage::pong);
 			ds << msg;
+			break;
+		}
+		case QPMessage::bye:
+		{
+			mConnections.remove(mConnections.indexOf(c));
+			mUserLut.remove(c->id());
+			QPMessage bye(QPMessage::bye, c->id());
+			QByteArray ba;
+			QDataStream ds1(&ba, QIODevice::WriteOnly);
+			ds1.device()->reset();
+			ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+			ds1 << (qint32)mConnections.size();
+			bye = ba;
+
+			for (auto u: mConnections)
+			{
+				QDataStream ds2(u->socket());
+				ds2.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+				ds2 << bye;
+			}
+
+			emit userLeftRoom(mRoomLut[c->room()], c);
 			break;
 		}
 		default:

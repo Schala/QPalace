@@ -92,15 +92,10 @@ private:
 	QSqlError generateDefaultDb(QString path);
 	bool loadDb();
 	void generatePassword(bool god = false);
-	void tiyid(QPConnection *c);
-	void logon(QPConnection *c, QPMessage &msg);
-	void info(QDataStream &ds, QPConnection *c);
 	void userStatus(QDataStream &ds, QPConnection *c);
-	void userLog(QDataStream &ds, QPConnection *c);
-	void mediaUrl(QDataStream &ds, QPConnection *c);
+	void mediaUrl(QDataStream &ds, QPConnection *c); // apparently sent on each room join?
 	void userMove(QPConnection *c, QPMessage &msg);
 	void blowThru(QPBlowThru *blow);
-	void userTalk(const QPConnection *c, QPMessage &msg);
 };
 
 #endif // _SERVER_H

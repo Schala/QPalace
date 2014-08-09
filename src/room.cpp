@@ -605,6 +605,7 @@ void QPRoom::handleUserLeft(const QPRoom *r, QPConnection *c)
 	{
 		mConnections.remove(mConnections.indexOf(c));
 		QPMessage eprs(QPMessage::eprs, c->id());
+		delete c;
 
 		for (auto p: mConnections)
 		{
