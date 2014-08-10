@@ -14,19 +14,13 @@ QPConnection::QPConnection(QTcpSocket *sock, const char *name, const QPRegistrat
 		mProps[i].id = mProps[i].crc = 0;
 }
 #else
-QPConnection::QPConnection(QTcpSocket *sock): mSocket(sock)
+QPConnection::QPConnection(QObject *parent, QTcpSocket *sock): QObject(parent), mSocket(sock)
 {
 	for (quint8 i = 0; i < 9; i++)
 		mProps[i].id = mProps[i].crc = 0;
 	connect(mSocket, SIGNAL(readyRead()), this, SLOT(handleReadyRead()));
 }
 #endif // SERVER
-
-QPConnection::~QPConnection()
-{
-	mSocket->abort();
-	delete mSocket;
-}
 
 QPConnection::Vendor QPConnection::vendorFromString(const char *str)
 {

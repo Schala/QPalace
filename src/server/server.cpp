@@ -3,7 +3,9 @@
 #include <QDir>
 #include <QSqlQuery>
 #include <QStandardPaths>
+#include <QThread>
 #include <QThreadPool>
+#include <QTimer>
 #include "server.hpp"
 
 static const char genPwdAsc[] = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -53,23 +55,6 @@ QPServer::QPServer(QObject *parent): QObject(parent), mUserCount(0)
 	}
 }
 
-QPServer::~QPServer()
-{
-	if (!mConnections.isEmpty())
-	{
-		for (auto c: mConnections)
-			delete c;
-		mConnections.clear();
-	}
-	if (!mRooms.isEmpty())
-	{
-		for (auto r: mRooms)
-			delete r;
-		mRooms.clear();
-	}
-	delete mServer;
-}
-
 bool QPServer::loadDb()
 {
 	QSqlQuery q;
@@ -78,7 +63,7 @@ bool QPServer::loadDb()
 	while (q.next())
 	{
 		qint16 roomId = (qint16)q.value("id").toInt();
-		mRooms.append(new QPRoom(roomId));
+		mRooms.append(new QPRoom(this, roomId));
 		mRoomLut[roomId] = mRooms.last();
 		connect(this, SIGNAL(userJoinedRoom(const QPRoom*,QPConnection*)), mRooms.last(), SLOT(handleUserJoined(const QPRoom*,QPConnection*)));
 		connect(this, SIGNAL(userLeftRoom(const QPRoom*,QPConnection*)), mRooms.last(), SLOT(handleUserLeft(const QPRoom*,QPConnection*)));
@@ -96,6 +81,14 @@ bool QPServer::start()
 		qFatal("Unable to start server: %s", qPrintable(mServer->errorString()));
 		return false;
 	}
+
+	QThread *thread = new QThread(this);
+	QTimer *timer = new QTimer(nullptr);
+	timer->setInterval(mPing);
+	timer->moveToThread(thread);
+	connect(timer, SIGNAL(timeout()), this, SLOT(checkConnections()), Qt::DirectConnection);
+	connect(thread, SIGNAL(started()), timer, SLOT(start()));
+	thread->start();
 	
 	return true;
 }
@@ -105,8 +98,10 @@ bool QPServer::loadConf(const QJsonObject &data)
 	mName = data["name"].toString().toLatin1();
 	mPort = (quint16)data["port"].toInt();
 	mMediaUrl = data["mediaUrl"].toString().toLatin1();
+	mPing = (quint32)data["pingIntervalSecs"].toInt() * 1000;
+	mPong = (quint32)data["pongIntervalSecs"].toInt() * 1000;
 	int maxThreadCount = data["maxThreadCount"].toInt();
-	if (maxThreadCount > 0)
+	if (maxThreadCount > 2)
 		QThreadPool::globalInstance()->setMaxThreadCount(maxThreadCount);
 	if (data["allowInsecureClients"].toBool())
 		mAccessFlags |= AllowInsecureClients;
@@ -209,7 +204,7 @@ QVariant QPServer::createRoom(const QString &name, qint32 flags, const QString &
 		q.addBindValue(QVariant(QVariant::ByteArray));
 	
 	q.exec();
-	mRooms.append(new QPRoom(mLastRoomId));
+	mRooms.append(new QPRoom(this, mLastRoomId));
 	mRoomLut[mLastRoomId] = mRooms.last();
 	connect(this, SIGNAL(userJoinedRoom(const QPRoom*,QPConnection*)), mRooms.last(), SLOT(handleUserJoined(const QPRoom*,QPConnection*)));
 	connect(this, SIGNAL(userLeftRoom(const QPRoom*,QPConnection*)), mRooms.last(), SLOT(handleUserLeft(const QPRoom*,QPConnection*)));
@@ -299,9 +294,50 @@ void QPServer::blowThru(QPBlowThru *blow)
 	delete blow;
 }
 
+void QPServer::logoff(QPConnection *c)
+{
+	mConnections.remove(mConnections.indexOf(c));
+	mUserLut.remove(c->id());
+	QPMessage bye(QPMessage::bye, c->id());
+	QByteArray ba;
+	QDataStream ds(&ba, QIODevice::WriteOnly);
+	ds.device()->reset();
+	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+	ds << (qint32)mConnections.size();
+	bye = ba;
+
+	for (auto u: mConnections)
+	{
+		QDataStream ds2(u->socket());
+		ds2.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+		ds2 << bye;
+	}
+
+	emit userLeftRoom(mRoomLut[c->room()], c);
+}
+
+void QPServer::checkConnections()
+{
+	for (auto c: mConnections)
+	{
+		QPMessage ping(QPMessage::ping);
+		QDataStream ds(c->socket());
+		ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+		ds << ping;
+
+		if (!c->socket()->waitForReadyRead(mPong))
+		{
+			qDebug("[%s] Connection timed out.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")));
+			logoff(c);
+		}
+	}
+}
+
 void QPServer::handleNewConnection()
 {
-	QPConnection *c = new QPConnection(mServer->nextPendingConnection());
+	QPConnection *c = new QPConnection(this, mServer->nextPendingConnection());
 	connect(c, SIGNAL(readyRead()), this, SLOT(handleReadyRead()));
 
 	// MSG_TIYID
@@ -311,9 +347,8 @@ void QPServer::handleNewConnection()
 	ds << tiyid;
 	c->setId(mUserCount);
 
-	if (!c->socket()->waitForReadyRead())
-		qDebug("[%s] Connection from %s timed out.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
-			qPrintable(c->socket()->peerAddress().toString()));
+	if (!c->socket()->waitForReadyRead(mPong))
+		qDebug("[%s] Connection timed out.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")));
 }
 
 void QPServer::handleReadyRead()
@@ -327,8 +362,8 @@ void QPServer::handleReadyRead()
 		ds >> msg;
 	else
 	{
-		qWarning("[%s] %s connection dropped because of incomplete packet data!", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
-			qPrintable(c->socket()->peerAddress().toString()));
+		qWarning("[%s] %s:%u connection dropped because of incomplete packet data!", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
+			qPrintable(c->socket()->peerAddress().toString()), c->socket()->peerPort());
 		delete c;
 		mUserCount--;
 	}
@@ -384,14 +419,14 @@ void QPServer::handleReadyRead()
 			{
 				mConnections.append(c);
 				mUserLut[c->id()] = c;
-				qDebug("[%s] %s logged in from %s using %s client on %s.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
-					c->userName(), qPrintable(c->socket()->peerAddress().toString()), QPConnection::vendorToString(c->vendor()),
+				qDebug("[%s] %s logged in from %s:%u using %s client on %s.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
+					c->userName(), qPrintable(c->socket()->peerAddress().toString()), c->socket()->peerPort(), QPConnection::vendorToString(c->vendor()),
 					c->osToString());
 			}
 			else
 			{
-				qDebug("[%s] %s connection dropped because of use of insecure client: %s.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
-					qPrintable(c->socket()->peerAddress().toString()), QPConnection::vendorToString(c->vendor()));
+				qDebug("[%s] %s:%u connection dropped because of use of insecure client: %s.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
+					qPrintable(c->socket()->peerAddress().toString()), c->socket()->peerPort(), QPConnection::vendorToString(c->vendor()));
 				delete c;
 				mUserCount--;
 				return;
@@ -507,30 +542,13 @@ void QPServer::handleReadyRead()
 		}
 		case QPMessage::bye:
 		{
-			mConnections.remove(mConnections.indexOf(c));
-			mUserLut.remove(c->id());
-			QPMessage bye(QPMessage::bye, c->id());
-			QByteArray ba;
-			QDataStream ds1(&ba, QIODevice::WriteOnly);
-			ds1.device()->reset();
-			ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-
-			ds1 << (qint32)mConnections.size();
-			bye = ba;
-
-			for (auto u: mConnections)
-			{
-				QDataStream ds2(u->socket());
-				ds2.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-
-				ds2 << bye;
-			}
-
-			emit userLeftRoom(mRoomLut[c->room()], c);
+			logoff(c);
 			break;
 		}
+		case QPMessage::pong:
+			break;
 		default:
-			qWarning("[%s] %s has sent an unknown or unsupported packet (%X). Ignoring...", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
-				qPrintable(c->socket()->peerAddress().toString()), msg.id());
+			qWarning("[%s] %s:%u has sent an unknown or unsupported packet (%X). Ignoring...", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
+				qPrintable(c->socket()->peerAddress().toString()), c->socket()->peerPort(), msg.id());
 	}
 }

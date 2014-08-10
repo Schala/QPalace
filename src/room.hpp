@@ -150,7 +150,7 @@ public:
 		DropZone = 0x100
 	};
 #ifdef SERVER
-	QPRoom(qint16 id);
+	QPRoom(QObject *parent, qint16 id);
 	bool save() {return true;}
 	void description(QPConnection *c, bool revised) const;
 	void users(QPConnection *c) const;

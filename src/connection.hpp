@@ -73,7 +73,7 @@ public:
 		PropGag = 0x1000
 	};
 #ifdef SERVER
-	QPConnection(QTcpSocket *sock);
+	QPConnection(QObject *parent, QTcpSocket *sock);
 	inline Vendor vendor() const { return mVendor; }
 	static Vendor vendorFromString(const char *str);
 	static const char* vendorToString(Vendor vendor);
@@ -90,7 +90,6 @@ public:
 	inline QPRegistration registration() const { return mReg; }
 	inline QPRegistration pseudoId() const { return mUid; }
 #endif // SERVER
-	~QPConnection();
 	inline QTcpSocket* socket() const { return mSocket; }
 	inline qint32 auxFlags() const { return mAuxFlags; }
 	inline const char* userName() const { return mUserName.data(); }
@@ -128,6 +127,9 @@ private:
 	qint32 mAuxFlags, mId;
 	qint16 mStatus, mRoom, mFace, mColor;
 	Vendor mVendor;
+#ifndef SERVER
+	bool mNetEndian;
+#endif // SERVER
 };
 
 #endif // _CONNECTION_H

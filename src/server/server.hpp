@@ -54,7 +54,6 @@ public:
 		Unicode = 0x800
 	};
 	QPServer(QObject *parent = nullptr);
-	~QPServer();
 	bool loadConf(const QJsonObject &data);
 	QVariant createRoom(const QString &name, qint32 flags,
 		const QString &bg, const char *pwd = nullptr, const QString &artist = QString());
@@ -73,6 +72,7 @@ signals:
 	void userDrew(const QPRoom *r, const QPConnection *c, QPDraw *draw);
 	void userTalked(const QPRoom *r, QPMessage &msg);
 private slots:
+	void checkConnections();
 	void handleNewConnection();
 	void handleReadyRead();
 private:
@@ -84,7 +84,7 @@ private:
 	QSqlDatabase mDb;
 	QTcpServer *mServer;
 	QByteArray mName, mMediaUrl;
-	quint32 mOptions;
+	quint32 mOptions, mPing, mPong;
 	qint32 mAccessFlags, mUserCount; // for ID assignment
 	quint16 mPort;
 	qint16 mLastRoomId; // for ID assignment
@@ -96,6 +96,7 @@ private:
 	void mediaUrl(QDataStream &ds, QPConnection *c); // apparently sent on each room join?
 	void userMove(QPConnection *c, QPMessage &msg);
 	void blowThru(QPBlowThru *blow);
+	void logoff(QPConnection *c);
 };
 
 #endif // _SERVER_H

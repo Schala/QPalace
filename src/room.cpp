@@ -13,7 +13,7 @@
 #include <QSqlQuery>
 #include <QSqlRecord>
 
-QPRoom::QPRoom(qint16 id)
+QPRoom::QPRoom(QObject *parent, qint16 id): QObject(parent)
 {
 	mId = id--;
 
