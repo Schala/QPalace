@@ -11,7 +11,6 @@ Known Bugs (server)
 ===================
 * LinPal tends to crash when sending a USERMOVE packet
 * Palace32 disconnects immediately upon connection attempt with log message "denied by server"
-* Server log shows "connection timed out" notice for all users when only one times out
 
 Future requirements (pending)
 =============================

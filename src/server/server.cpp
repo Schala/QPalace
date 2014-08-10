@@ -1,6 +1,7 @@
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
+#include <QMutex>
 #include <QSqlQuery>
 #include <QStandardPaths>
 #include <QThread>
@@ -322,6 +323,8 @@ void QPServer::checkConnections()
 {
 	for (auto c: mConnections)
 	{
+		QMutex m;
+		m.lock();
 		QPMessage ping(QPMessage::ping);
 		QDataStream ds(c->socket());
 		ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
@@ -332,6 +335,7 @@ void QPServer::checkConnections()
 			qDebug("[%s] Connection timed out.", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")));
 			logoff(c);
 		}
+		m.unlock();
 	}
 }
 

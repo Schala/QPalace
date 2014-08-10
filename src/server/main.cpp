@@ -35,7 +35,7 @@ void generateSettings(QJsonObject &data)
 	data["disableWhispering"] = false;
 	data["maxThreadCount"] = 5;
 	data["unicodeEnabled"] = true;
-	data["pingIntervalSecs"] = 60;
+	data["pingIntervalSecs"] = 300;
 	data["pongIntervalSecs"] = 5;
 }
 
