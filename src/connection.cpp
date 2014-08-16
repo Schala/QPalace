@@ -75,19 +75,7 @@ const char* QPConnection::osToString() const
 		case Win64: return "Windows (64-bit)";
 		case LinuxX86: return "Linux (x86)";
 		case LinuxX86_64: return "Linux (x86_64)";
-		case AndroidARMv5: return "Android (ARMv5)";
-		case AndroidARMv7: return "Android (ARMv7)";
-		case AndroidX86: return "Android (x86)";
-		case Dalvik: return "Dalvik";
-		case iOS: return "iOS";
-		case iOSSim: return "iOS Simulator";
-		case WinRT: return "Windows RT";
-		case CLR: return ".NET";
-		case Python2: return "Python v2";
-		case Python3: return "Python v3";
-		case Ruby: return "Ruby";
 		case Flash: return "Flash";
-		case Web: return "the web";
 		default: return "old or unknown platform";
 	}
 }

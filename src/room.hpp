@@ -99,8 +99,8 @@ struct QPImage final
 class QPDraw final
 {
 	friend class QPRoom;
-	friend QDataStream& operator<<(QDataStream &ds, const QPDraw &draw);
-	friend QDataStream& operator>>(QDataStream &ds, QPDraw &draw);
+	friend QDataStream& operator<<(QDataStream &ds, const QPDraw *draw);
+	friend QDataStream& operator>>(QDataStream &ds, QPDraw *draw);
 public:
 	enum
 	{
@@ -114,7 +114,7 @@ public:
 	enum
 	{
 		Back = 0,
-		Fill = 0x01,
+		Fill = 0x1,
 		Ellipsed = 0x40,
 		Front = 0x80,
 	};
@@ -130,8 +130,8 @@ private:
 	qint16 mPenSize, mFlags, mCmd;
 };
 
-QDataStream& operator<<(QDataStream &ds, const QPDraw &draw);
-QDataStream& operator>>(QDataStream &ds, QPDraw &draw);
+QDataStream& operator<<(QDataStream &ds, const QPDraw *draw);
+QDataStream& operator>>(QDataStream &ds, QPDraw *draw);
 
 class QPRoom final: public QObject
 {
@@ -166,6 +166,7 @@ public:
 	inline const char* name() const { return mName; }
 public slots:
 	void handleBlowThru(const QPRoom *r, QPBlowThru *blow);
+	void handleUserDrew(const QPRoom *r, const QPConnection *c, QPDraw *draw);
 	void handleUserJoined(const QPRoom *r, QPConnection *c);
 	void handleUserLeft(const QPRoom *r, QPConnection *c);
 	void handleUserMoved(const QPRoom *r, const QPConnection *c);

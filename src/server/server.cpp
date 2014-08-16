@@ -1,9 +1,11 @@
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
+#include <QFuture>
 #include <QMutex>
 #include <QSqlQuery>
 #include <QStandardPaths>
+#include <qtconcurrentrun.h>
 #include <QThread>
 #include <QThreadPool>
 #include <QTimer>
@@ -71,6 +73,7 @@ bool QPServer::loadDb()
 		connect(this, SIGNAL(userMoved(const QPRoom*,const QPConnection*)), mRooms.last(), SLOT(handleUserMoved(const QPRoom*,const QPConnection*)));
 		connect(this, SIGNAL(roomBlowThru(const QPRoom*,QPBlowThru*)), mRooms.last(), SLOT(handleBlowThru(const QPRoom*,QPBlowThru*)));
 		connect(this, SIGNAL(userTalked(const QPRoom*,QPMessage&)), mRooms.last(), SLOT(handleUserTalked(const QPRoom*,QPMessage&)));
+		connect(this, SIGNAL(userDrew(const QPRoom*,const QPConnection*,QPDraw*)), mRooms.last(), SLOT(handleUserDrew(const QPRoom*,const QPConnection*,QPDraw*)));
 	}
 	return true;
 }
@@ -87,7 +90,7 @@ bool QPServer::start()
 	QTimer *timer = new QTimer(nullptr);
 	timer->setInterval(mPing);
 	timer->moveToThread(thread);
-	connect(timer, SIGNAL(timeout()), this, SLOT(checkConnections()), Qt::DirectConnection);
+	connect(timer, SIGNAL(timeout()), this, SLOT(handlePing()), Qt::DirectConnection);
 	connect(thread, SIGNAL(started()), timer, SLOT(start()));
 	thread->start();
 	
@@ -211,6 +214,7 @@ QVariant QPServer::createRoom(const QString &name, qint32 flags, const QString &
 	connect(this, SIGNAL(userLeftRoom(const QPRoom*,QPConnection*)), mRooms.last(), SLOT(handleUserLeft(const QPRoom*,QPConnection*)));
 	connect(this, SIGNAL(userMoved(const QPRoom*,const QPConnection*)), mRooms.last(), SLOT(handleUserMoved(const QPRoom*,const QPConnection*)));
 	connect(this, SIGNAL(roomBlowThru(const QPRoom*,QPBlowThru*)), mRooms.last(), SLOT(handleBlowThru(const QPRoom*,QPBlowThru*)));
+	connect(this, SIGNAL(userDrew(const QPRoom*,const QPConnection*,QPDraw*)), mRooms.last(), SLOT(handleUserDrew(const QPRoom*,const QPConnection*,QPDraw*)));
 	return q.lastInsertId();
 }
 
@@ -317,6 +321,11 @@ void QPServer::logoff(QPConnection *c)
 	}
 
 	emit userLeftRoom(mRoomLut[c->room()], c);
+}
+
+void QPServer::handlePing()
+{
+	QFuture<void> fut = QtConcurrent::run(this, &QPServer::checkConnections);
 }
 
 void QPServer::checkConnections()
@@ -551,6 +560,18 @@ void QPServer::handleReadyRead()
 		}
 		case QPMessage::pong:
 			break;
+		case QPMessage::draw:
+		{
+			QPDraw *draw = new QPDraw();
+			QByteArray ba(msg.data(), msg.size());
+			QDataStream ds1(ba);
+			ds1.device()->reset();
+			ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+			ds1 >> draw;
+			emit userDrew(mRoomLut[c->room()], c, draw);
+			break;
+		}
 		default:
 			qWarning("[%s] %s:%u has sent an unknown or unsupported packet (%X). Ignoring...", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
 				qPrintable(c->socket()->peerAddress().toString()), c->socket()->peerPort(), msg.id());

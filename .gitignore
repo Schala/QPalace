@@ -5,6 +5,7 @@
 build-*/
 [Dd]ebug/
 [Rr]elease/
+core.*
 desktop.ini
 Thumbs.db
 *.autosave

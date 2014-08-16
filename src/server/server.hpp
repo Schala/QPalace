@@ -72,7 +72,7 @@ signals:
 	void userDrew(const QPRoom *r, const QPConnection *c, QPDraw *draw);
 	void userTalked(const QPRoom *r, QPMessage &msg);
 private slots:
-	void checkConnections();
+	void handlePing();
 	void handleNewConnection();
 	void handleReadyRead();
 private:
@@ -97,6 +97,7 @@ private:
 	void userMove(QPConnection *c, QPMessage &msg);
 	void blowThru(QPBlowThru *blow);
 	void logoff(QPConnection *c);
+	void checkConnections();
 };
 
 #endif // _SERVER_H
