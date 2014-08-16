@@ -1,6 +1,6 @@
-#include "crypt.hpp"
+#include "codec.hpp"
 
-QPCrypt::QPCrypt()
+QPCodec::QPCodec()
 {
 	mKey = 0xa2c2a;
 	qint32 quo, rem, k;
@@ -16,7 +16,7 @@ QPCrypt::QPCrypt()
 	mKey = 1;
 }
 
-void QPCrypt::encrypt(char *buf, quint32 len)
+void QPCodec::encode(char *buf, quint32 len)
 {
 	qint32 lastChar = 0, rc = 0;
 	quint8 b;
@@ -29,7 +29,7 @@ void QPCrypt::encrypt(char *buf, quint32 len)
 	}
 }
 
-void QPCrypt::decrypt(char *buf, quint32 len)
+void QPCodec::decode(char *buf, quint32 len)
 {
 	quint8 lastChar = 0, b;
 	qint32 rc = 0;

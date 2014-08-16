@@ -9,7 +9,7 @@ QPServer 1.0 - full functionality of PServer (late summer-early fall 2014)
 - display url
 - door lock
 - door unlock
-- finish draw
+- rework draw (store raw binary in database blob)
 - extended info
 - file not found
 - file query

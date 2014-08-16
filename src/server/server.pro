@@ -10,7 +10,9 @@ QT += network sql concurrent
 CONFIG += console c++11
 DEFINES += SERVER
 
-HEADERS += ../shared.hpp ../crypt.hpp ../message.hpp ../connection.hpp ../room.hpp server.hpp \
-    ../blowthru.hpp
-SOURCES += ../crypt.cpp ../message.cpp ../connection.cpp ../room.cpp server.cpp main.cpp \
-    ../blowthru.cpp
+HEADERS += ../shared.hpp ../message.hpp ../connection.hpp ../room.hpp server.hpp \
+    ../blowthru.hpp \
+    ../codec.hpp
+SOURCES += ../message.cpp ../connection.cpp ../room.cpp server.cpp main.cpp \
+    ../blowthru.cpp \
+    ../codec.cpp

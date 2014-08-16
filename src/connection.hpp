@@ -12,7 +12,7 @@
 #include "shared.hpp"
 
 #ifndef SERVER
-#include "client/registration.hpp"
+#include "client/userid.hpp"
 #endif // SERVER
 
 class QPConnection final: public QObject
@@ -74,9 +74,9 @@ public:
 	const char* osToString() const;
 #else
 	QPConnection(QTcpSocket *sock, const char *name, const QPRegistration &reg, AuxFlags auxFlags,
-		const QPRegistration &uid, qint16 initRoom, const char *wizpwd = nullptr);
-	inline QPRegistration registration() const { return mReg; }
-	inline QPRegistration pseudoId() const { return mUid; }
+		const QPUserId &uid, qint16 initRoom, const char *wizpwd = nullptr);
+	inline QPUserId& registration() const { return mReg; }
+	inline QPUserId& pseudoId() const { return mUid; }
 #endif // SERVER
 	inline QTcpSocket* socket() const { return mSocket; }
 	inline qint32 auxFlags() const { return mAuxFlags; }
@@ -106,7 +106,7 @@ public slots:
 	void handleReadyRead();
 private:
 #ifndef SERVER
-	QPRegistration mReg, mUid;
+	QPUserId mReg, mUid;
 #endif // SERVER
 	QTcpSocket *mSocket;
 	QPAssetSpec mProps[9];

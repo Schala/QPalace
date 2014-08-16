@@ -10,7 +10,6 @@ Known Bugs (server)
 ===================
 * LinPal tends to crash when sending a USERMOVE packet
 * Palace32 disconnects immediately upon connection attempt with log message "denied by server"
-* Drawing with certain colors (ie. pure red (255,0,0)) causes some odd drawing side effects to appear
 
 Future requirements (pending)
 =============================

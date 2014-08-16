@@ -1,4 +1,3 @@
-#include <cstdio>
 #include <QByteArray>
 #include <QCommandLineParser>
 #include <QCoreApplication>

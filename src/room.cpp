@@ -125,129 +125,6 @@ QPHotspot::QPHotspot(const QJsonObject &data)
 		mStatePtrs.append((qint16)stateIndices[i].toInt());
 }
 
-QDataStream& operator<<(QDataStream &ds, const QPDraw *draw)
-{
-	QByteArray dbuf;
-	QDataStream ds1(&dbuf, QIODevice::WriteOnly);
-	ds1.device()->reset();
-	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-
-	if ((draw->mCmd != QPDraw::Delete) || (draw->mCmd != QPDraw::Detonate))
-	{
-		ds1 << draw->mPenSize << (qint16)draw->mPolygon.size()-1;
-
-		// duplicate values for compatibility
-		ds1 << (qint8)(((draw->mLineClr & 0xff0000) >> 16) & 0xff); // red
-		ds1 << (qint8)(((draw->mLineClr & 0xff0000) >> 16) & 0xff); // red
-		ds1 << (qint8)(((draw->mLineClr & 0xff00) >> 8) & 0xff); // green
-		ds1 << (qint8)(((draw->mLineClr & 0xff00) >> 8) & 0xff); // green
-		ds1 << (qint8)(draw->mLineClr & 0xff); // blue
-		ds1 << (qint8)(draw->mLineClr & 0xff); // blue
-
-		for (auto p: draw->mPolygon)
-			ds1 << p.y << p.x;
-
-		ds1 << (qint8)qCeil(draw->mLineAlpha * 0xff);
-		ds1 << (qint8)(((draw->mLineClr & 0xff0000) >> 16) & 0xff); // red
-		ds1 << (qint8)(((draw->mLineClr & 0xff00) >> 8) & 0xff); // green
-		ds1 << (qint8)(draw->mLineClr & 0xff); // blue
-
-		ds1 << (qint8)qCeil(draw->mFillAlpha * 0xff);
-		ds1 << (qint8)(((draw->mFillClr & 0xff0000) >> 16) & 0xff); // red
-		ds1 << (qint8)(((draw->mFillClr & 0xff00) >> 8) & 0xff); // green
-		ds1 << (qint8)(draw->mFillClr & 0xff); // blue
-	}
-
-	qint16 encCmd = (draw->mCmd | (draw->mFlags << 8));
-	ds << (qint32)0 << encCmd << (qint16)dbuf.size() << (qint16)0;
-	ds.writeRawData(dbuf.constData(), dbuf.size());
-	return ds;
-}
-
-QDataStream& operator>>(QDataStream &ds, QPDraw *draw)
-{
-	quint16 size, points;
-	quint8 r, g, b;
-
-	ds.skipRawData(4); // unused
-	ds >> draw->mCmd >> size;
-	ds.skipRawData(2); // unneeded offset start since this is streamed
-
-	draw->mFlags = draw->mCmd >> 8;
-	draw->mCmd &= 0xff;
-
-	if ((draw->mCmd == QPDraw::Delete) || (draw->mCmd == QPDraw::Detonate))
-		return ds;
-
-	QByteArray dbuf;
-	dbuf.resize(size);
-	ds.readRawData(dbuf.data(), size);
-	QDataStream ds1(&dbuf, QIODevice::ReadOnly);
-	ds1.device()->reset();
-	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-
-	/*if (!ds1.device()->bytesAvailable() < size)
-	{
-		qWarning("[%s] Corrupt draw packet encountered!", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")));
-		return ds;
-	}*/
-
-	ds1 >> draw->mPenSize >> points;
-
-	// duplicate values for compatibility
-	ds1 >> r;
-	ds1.skipRawData(1);
-	ds1 >> g;
-	ds1.skipRawData(1);
-	ds1 >> b;
-	ds1.skipRawData(1);
-
-	draw->mLineClr = draw->mFillClr = draw->mPenClr = argbToUint(0xff, r, g, b);
-	draw->mLineAlpha = draw->mFillAlpha = draw->mPenAlpha = 1;
-
-	for (quint16 i = 0; i <= points; i++)
-	{
-		draw->mPolygon.append(QPPoint());
-		ds1 >> draw->mPolygon[i].y >> draw->mPolygon[i].x;
-	}
-
-	if (ds1.device()->bytesAvailable())
-	{
-		try
-		{
-			quint8 alphaByte;
-			qreal alpha;
-
-			ds1 >> alphaByte >> r >> g >> b;
-			alpha = (qreal)alphaByte / 0xff;
-			draw->mLineClr = argbToUint(alphaByte, r, g, b);
-			draw->mLineAlpha = alpha;
-
-			ds1 >> alphaByte >> r >> g >> b;
-			alpha = (qreal)alphaByte / 0xff;
-			draw->mFillClr = argbToUint(alphaByte, r, g, b);
-			draw->mFillAlpha = alpha;
-		}
-		catch (QException &e)
-		{
-			// fallback to old behavior of using mPenClr for everything
-			draw->mFillClr = draw->mLineClr = draw->mPenClr;
-			draw->mFillAlpha = draw->mLineAlpha = draw->mPenAlpha;
-			draw->mPenSize = 0;
-		}
-	}
-	else
-	{
-		draw->mFillClr = draw->mLineClr = draw->mPenClr;
-		draw->mFillAlpha = draw->mLineAlpha = draw->mPenAlpha;
-		if ((draw->mFlags & QPDraw::Ellipsed) || (draw->mFlags & QPDraw::Fill))
-			// no more packets, must be PChat 3
-			draw->mPenSize = 0;
-	}
-
-	return ds;
-}
-
 void QPRoom::description(QPConnection *c, bool revised) const
 {
 	QByteArray ba;
@@ -275,11 +152,7 @@ void QPRoom::description(QPConnection *c, bool revised) const
 
 	qint16 drawArraySize = 0;
 	for (auto d: mDraws)
-	{
-		drawArraySize += 10;
-		if ((d.mCmd != QPDraw::Delete) || (d.mCmd != QPDraw::Detonate))
-			drawArraySize += (d.mPolygon.size()*4) + 18;
-	}
+		drawArraySize += d.size();
 	
 	qint16 pos = 2;
 	
@@ -420,7 +293,7 @@ void QPRoom::description(QPConnection *c, bool revised) const
 
 	if (draw1Pos)
 		for (auto d: mDraws)
-			ds2 << &d;
+			ds2.writeRawData(d.constData(), d.size());
 
 	if (lProp1Pos)
 		for (auto lp: mLProps)
@@ -518,6 +391,130 @@ void QPRoom::description(QPMessage &msg)
 		ds >> sLen;
 		ds.readRawData(mArtistName.data(), sLen);
 	}
+}
+
+QDataStream& operator<<(QDataStream &ds, const QPDraw *draw)
+{
+	QByteArray dbuf;
+	QDataStream ds1(&dbuf, QIODevice::WriteOnly);
+	ds1.device()->reset();
+	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+	if ((draw->mCmd != QPDraw::Delete) || (draw->mCmd != QPDraw::Detonate))
+	{
+		ds1 << draw->mPenSize << (qint16)draw->mPolygon.size()-1;
+
+		// duplicate values for compatibility
+		ds1 << (qint8)(((draw->mLineClr & 0xff0000) >> 16) & 0xff); // red
+		ds1 << (qint8)(((draw->mLineClr & 0xff0000) >> 16) & 0xff); // red
+		ds1 << (qint8)(((draw->mLineClr & 0xff00) >> 8) & 0xff); // green
+		ds1 << (qint8)(((draw->mLineClr & 0xff00) >> 8) & 0xff); // green
+		ds1 << (qint8)(draw->mLineClr & 0xff); // blue
+		ds1 << (qint8)(draw->mLineClr & 0xff); // blue
+
+		for (auto p: draw->mPolygon)
+			ds1 << p.y << p.x;
+
+		ds1 << (qint8)qCeil(draw->mLineAlpha * 0xff);
+		ds1 << (qint8)(((draw->mLineClr & 0xff0000) >> 16) & 0xff); // red
+		ds1 << (qint8)(((draw->mLineClr & 0xff00) >> 8) & 0xff); // green
+		ds1 << (qint8)(draw->mLineClr & 0xff); // blue
+
+		ds1 << (qint8)qCeil(draw->mFillAlpha * 0xff);
+		ds1 << (qint8)(((draw->mFillClr & 0xff0000) >> 16) & 0xff); // red
+		ds1 << (qint8)(((draw->mFillClr & 0xff00) >> 8) & 0xff); // green
+		ds1 << (qint8)(draw->mFillClr & 0xff); // blue
+	}
+
+	qint16 encCmd = (draw->mCmd | (draw->mFlags << 8));
+	ds << (qint32)0 << encCmd << (qint16)dbuf.size() << (qint16)0;
+	ds.writeRawData(dbuf.constData(), dbuf.size());
+	return ds;
+}
+
+
+QDataStream& operator>>(QDataStream &ds, QPDraw *draw)
+{
+	quint16 size, points;
+	quint8 r, g, b;
+
+	ds.skipRawData(4); // unused
+	ds >> draw->mCmd >> size;
+	ds.skipRawData(2); // unneeded offset start since this is streamed
+
+	draw->mFlags = draw->mCmd >> 8;
+	draw->mCmd &= 0xff;
+
+	if ((draw->mCmd == QPDraw::Delete) || (draw->mCmd == QPDraw::Detonate))
+		return ds;
+
+	QByteArray dbuf;
+	dbuf.resize(size);
+	ds.readRawData(dbuf.data(), size);
+	QDataStream ds1(&dbuf, QIODevice::ReadOnly);
+	ds1.device()->reset();
+	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+	/*if (!ds1.device()->bytesAvailable() < size)
+	{
+		qWarning("[%s] Corrupt draw packet encountered!", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")));
+		return ds;
+	}*/
+
+	ds1 >> draw->mPenSize >> points;
+
+	// duplicate values for compatibility
+	ds1 >> r;
+	ds1.skipRawData(1);
+	ds1 >> g;
+	ds1.skipRawData(1);
+	ds1 >> b;
+	ds1.skipRawData(1);
+
+	draw->mLineClr = draw->mFillClr = draw->mPenClr = argbToUint(0xff, r, g, b);
+	draw->mLineAlpha = draw->mFillAlpha = draw->mPenAlpha = 1;
+
+	for (quint16 i = 0; i <= points; i++)
+	{
+		draw->mPolygon.append(QPPoint());
+		ds1 >> draw->mPolygon[i].y >> draw->mPolygon[i].x;
+	}
+
+	if (ds1.device()->bytesAvailable())
+	{
+		try
+		{
+			quint8 alphaByte;
+			qreal alpha;
+
+			ds1 >> alphaByte >> r >> g >> b;
+			alpha = (qreal)alphaByte / 0xff;
+			draw->mLineClr = argbToUint(alphaByte, r, g, b);
+			draw->mLineAlpha = alpha;
+
+			ds1 >> alphaByte >> r >> g >> b;
+			alpha = (qreal)alphaByte / 0xff;
+			draw->mFillClr = argbToUint(alphaByte, r, g, b);
+			draw->mFillAlpha = alpha;
+		}
+		catch (QException &e)
+		{
+			// fallback to old behavior of using mPenClr for everything
+			draw->mFillClr = draw->mLineClr = draw->mPenClr;
+			draw->mFillAlpha = draw->mLineAlpha = draw->mPenAlpha;
+			draw->mPenSize = 0;
+		}
+	}
+	else
+	{
+		draw->mFillClr = draw->mLineClr = draw->mPenClr;
+		draw->mFillAlpha = draw->mLineAlpha = draw->mPenAlpha;
+		if ((draw->mFlags & QPDraw::Ellipsed) || (draw->mFlags & QPDraw::Fill))
+			// no more packets, must be PChat 3
+			draw->mPenSize = 0;
+	}
+
+	return ds;
 }
 
 #endif // SERVER
@@ -672,24 +669,24 @@ void QPRoom::handleUserTalked(const QPRoom *r, QPMessage &msg)
 		}
 }
 
-void QPRoom::handleUserDrew(const QPRoom *r, const QPConnection *c, QPDraw *draw)
+void QPRoom::handleUserDrew(const QPRoom *r, const QPConnection *c, const QByteArray &draw)
 {
 	if (this == r)
 	{
-		if (draw->mCmd == QPDraw::Delete)
+		if (draw[4] == 4) // cmd == delete
 			mDraws.removeLast();
-		else if (draw->mCmd == QPDraw::Detonate)
+		else if (draw[4] == 3) // cmd == detonate
 			mDraws.clear();
 		else
 		{
-			mDraws.append(*draw);
+			mDraws.append(draw);
 			QPMessage msg(QPMessage::draw);
 			QByteArray ba;
 			QDataStream ds1(&ba, QIODevice::WriteOnly);
 			ds1.device()->reset();
 			ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 
-			ds1 << draw;
+			ds1.writeRawData(draw.constData(), draw.size());
 			msg = ba;
 
 			for (auto p: mConnections)

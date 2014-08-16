@@ -73,7 +73,7 @@ bool QPServer::loadDb()
 		connect(this, SIGNAL(userMoved(const QPRoom*,const QPConnection*)), mRooms.last(), SLOT(handleUserMoved(const QPRoom*,const QPConnection*)));
 		connect(this, SIGNAL(roomBlowThru(const QPRoom*,QPBlowThru*)), mRooms.last(), SLOT(handleBlowThru(const QPRoom*,QPBlowThru*)));
 		connect(this, SIGNAL(userTalked(const QPRoom*,QPMessage&)), mRooms.last(), SLOT(handleUserTalked(const QPRoom*,QPMessage&)));
-		connect(this, SIGNAL(userDrew(const QPRoom*,const QPConnection*,QPDraw*)), mRooms.last(), SLOT(handleUserDrew(const QPRoom*,const QPConnection*,QPDraw*)));
+		connect(this, SIGNAL(userDrew(const QPRoom*,const QPConnection*,const QByteArray&)), mRooms.last(), SLOT(handleUserDrew(const QPRoom*,const QPConnection*,const QByteArray&)));
 	}
 	return true;
 }
@@ -201,7 +201,7 @@ QVariant QPServer::createRoom(const QString &name, qint32 flags, const QString &
 	if (pwd)
 	{
 		QByteArray encPwd(pwd);
-		mCrypt.encrypt(encPwd.data(), encPwd.size());
+		mCodec.encode(encPwd.data(), encPwd.size());
 		q.addBindValue(encPwd);
 	}
 	else
@@ -214,20 +214,18 @@ QVariant QPServer::createRoom(const QString &name, qint32 flags, const QString &
 	connect(this, SIGNAL(userLeftRoom(const QPRoom*,QPConnection*)), mRooms.last(), SLOT(handleUserLeft(const QPRoom*,QPConnection*)));
 	connect(this, SIGNAL(userMoved(const QPRoom*,const QPConnection*)), mRooms.last(), SLOT(handleUserMoved(const QPRoom*,const QPConnection*)));
 	connect(this, SIGNAL(roomBlowThru(const QPRoom*,QPBlowThru*)), mRooms.last(), SLOT(handleBlowThru(const QPRoom*,QPBlowThru*)));
-	connect(this, SIGNAL(userDrew(const QPRoom*,const QPConnection*,QPDraw*)), mRooms.last(), SLOT(handleUserDrew(const QPRoom*,const QPConnection*,QPDraw*)));
+	connect(this, SIGNAL(userDrew(const QPRoom*,const QPConnection*,const QByteArray&)), mRooms.last(), SLOT(handleUserDrew(const QPRoom*,const QPConnection*,const QByteArray&)));
 	return q.lastInsertId();
 }
 
 QVariant QPServer::createPassword(const char *pwd, quint8 flags)
 {
 	QByteArray encPwd(pwd);
-	QPCrypt crypt;
-	
 	QSqlQuery q;
 	q.prepare("INSERT INTO password(flags, checksum) VALUES(?, ?)");
 	q.addBindValue(flags);
 	
-	mCrypt.encrypt(encPwd.data(), encPwd.size());
+	mCodec.encode(encPwd.data(), encPwd.size());
 	QString pwHash(QCryptographicHash::hash(encPwd, QCryptographicHash::Sha256).toHex());
 	q.addBindValue(pwHash);
 	
@@ -539,10 +537,10 @@ void QPServer::handleReadyRead()
 				len -= 2; // 2 extra null chars ?
 				char text[len];
 				ds1.readRawData(text, len);
-				mCrypt.decrypt(text, len-1);
+				mCodec.decode(text, len-1);
 				qDebug("[%s - %s] %s: %s", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
 					mRoomLut[c->room()]->name(), c->userName(), text);
-				mCrypt.encrypt(text, len-1);
+				mCodec.encode(text, len-1);
 			}
 			emit userTalked(mRoomLut[c->room()], msg);
 			break;
@@ -562,14 +560,8 @@ void QPServer::handleReadyRead()
 			break;
 		case QPMessage::draw:
 		{
-			QPDraw *draw = new QPDraw();
 			QByteArray ba(msg.data(), msg.size());
-			QDataStream ds1(ba);
-			ds1.device()->reset();
-			ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-
-			ds1 >> draw;
-			emit userDrew(mRoomLut[c->room()], c, draw);
+			emit userDrew(mRoomLut[c->room()], c, ba);
 			break;
 		}
 		default:

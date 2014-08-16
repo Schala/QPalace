@@ -5,13 +5,13 @@
 TEMPLATE = app
 INCLUDEPATH += .
 QT -= gui
-CONFIG += c++11 enctest
+CONFIG += c++11 uidtest
 
-regtest {
-	TARGET = regtest
-	HEADERS += ../src/client/registration.hpp
-	SOURCES += regtest.cpp \
-						../src/client/registration.cpp
+uidtest {
+	TARGET = uidtest
+	HEADERS += ../src/client/userid.hpp
+	SOURCES += uidtest.cpp \
+						../src/client/userid.cpp
 }
 
 enctest {

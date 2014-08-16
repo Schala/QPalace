@@ -4,7 +4,7 @@
 #include <QRegExp>
 #include <QString>
 #include <QtEndian>
-#include "registration.hpp"
+#include "userid.hpp"
 
 static const quint32 crcMask[] =
 {
@@ -28,14 +28,14 @@ static const quint32 crcMask[] =
 
 static const QByteArray codeAsc("ABCDEFGHJKLMNPQRSTUVWXYZ23456789");
 
-QPRegistration::QPRegistration()
+QPUserId::QPUserId()
 {
-	quint32 seed = QDateTime::currentDateTime.toTime_t();
+	quint32 seed = QDateTime::currentDateTime().toTime_t();
 	computeCrc(seed);
 	mCounter = (seed ^ 0x9602c9bf) ^ mCrc;
 }
 
-void QPRegistration::computeCrc(quint32 seed)
+void QPUserId::computeCrc(quint32 seed)
 {
 	mCrc = 0xa95ade76;
 	quint32 currentByte;
@@ -49,7 +49,7 @@ void QPRegistration::computeCrc(quint32 seed)
 	}
 }
 
-QPRegistration::QPRegistration(const char *regcode)
+QPUserId::QPUserId(const char *regcode)
 {
 	QString code = regcode;
 	QRegExp rx("[^ABCDEFGHJKLMNPQRSTUVWXYZ23456789]");
@@ -94,7 +94,7 @@ QPRegistration::QPRegistration(const char *regcode)
 	mCounter = qToBigEndian(mCounter);
 }
 
-const char* QPRegistration::generate()
+const char* QPUserId::generate()
 {
 	QByteArray s(15, 0);
 	qsrand(QDateTime::currentDateTime().toTime_t());

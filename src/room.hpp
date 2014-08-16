@@ -96,6 +96,7 @@ struct QPImage final
 	qint16 id, alpha;
 };
 
+#ifndef SERVER
 class QPDraw final
 {
 	friend class QPRoom;
@@ -118,11 +119,6 @@ public:
 		Ellipsed = 0x40,
 		Front = 0x80,
 	};
-#ifdef SERVER
-	QPDraw() {}
-	QPDraw(const QJsonObject &data);
-#else
-#endif // SERVER
 private:
 	QVector<QPPoint> mPolygon;
 	qreal mPenAlpha, mFillAlpha, mLineAlpha;
@@ -132,6 +128,7 @@ private:
 
 QDataStream& operator<<(QDataStream &ds, const QPDraw *draw);
 QDataStream& operator>>(QDataStream &ds, QPDraw *draw);
+#endif // SERVER
 
 class QPRoom final: public QObject
 {
@@ -166,7 +163,7 @@ public:
 	inline const char* name() const { return mName; }
 public slots:
 	void handleBlowThru(const QPRoom *r, QPBlowThru *blow);
-	void handleUserDrew(const QPRoom *r, const QPConnection *c, QPDraw *draw);
+	void handleUserDrew(const QPRoom *r, const QPConnection *c, const QByteArray &draw);
 	void handleUserJoined(const QPRoom *r, QPConnection *c);
 	void handleUserLeft(const QPRoom *r, QPConnection *c);
 	void handleUserMoved(const QPRoom *r, const QPConnection *c);
@@ -181,8 +178,10 @@ private:
 	QVector<QPLooseProp> mLProps;
 	QVector<QPPoint> mPoints;
 	QVector<QPSpotState> mStates;
+#ifndef SERVER
 	QVector<QPDraw> mDraws;
-	QVector<QByteArray> mScripts, mImgNames, mSpotNames;
+#endif // SERVER
+	QVector<QByteArray> mDraws, mScripts, mImgNames, mSpotNames;
 };
 
 #endif // _ROOM_H

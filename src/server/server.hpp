@@ -14,7 +14,7 @@
 
 #include "../blowthru.hpp"
 #include "../connection.hpp"
-#include "../crypt.hpp"
+#include "../codec.hpp"
 #include "../message.hpp"
 #include "../room.hpp"
 
@@ -69,14 +69,14 @@ signals:
 	void userLoggedOn(const QPConnection *c);
 	void userLoggedOff(const QPConnection *c);
 	void userMoved(const QPRoom *r, const QPConnection *c);
-	void userDrew(const QPRoom *r, const QPConnection *c, QPDraw *draw);
+	void userDrew(const QPRoom *r, const QPConnection *c, const QByteArray &draw);
 	void userTalked(const QPRoom *r, QPMessage &msg);
 private slots:
 	void handlePing();
 	void handleNewConnection();
 	void handleReadyRead();
 private:
-	QPCrypt mCrypt;
+	QPCodec mCodec;
 	QVector<QPRoom*> mRooms;
 	QHash<qint32, QPConnection*> mUserLut;
 	QHash<qint16, QPRoom*> mRoomLut;
