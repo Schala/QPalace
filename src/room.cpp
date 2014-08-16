@@ -673,9 +673,9 @@ void QPRoom::handleUserDrew(const QPRoom *r, const QPConnection *c, const QByteA
 {
 	if (this == r)
 	{
-		if (draw[4] == 4) // cmd == delete
+		if ((draw[4] == 4) && !mDraws.empty()) // cmd == delete
 			mDraws.removeLast();
-		else if (draw[4] == 3) // cmd == detonate
+		else if ((draw[4] == 3) && !mDraws.empty()) // cmd == detonate
 			mDraws.clear();
 		else
 		{
