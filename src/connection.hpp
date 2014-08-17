@@ -47,6 +47,12 @@ public:
 		OpenPalace,
 		QPalace = 0xff
 	};
+	enum class Draw: quint8
+	{
+		None = 0,
+		Paint,
+		Erase
+	};
 	enum
 	{
 		SuperUser = 0x1,
@@ -80,7 +86,7 @@ public:
 #endif // SERVER
 	inline QTcpSocket* socket() const { return mSocket; }
 	inline qint32 auxFlags() const { return mAuxFlags; }
-	inline const char* userName() const { return mUserName.data(); }
+	inline const char* userName() const { return mUserName; }
 	inline void setUserName(const char *username) { if (username) mUserName = QByteArray(username); }
 	inline const char* wizardPassword() const { return mWizardPwd; }
 	inline qint16 status() const { return mStatus; }
@@ -95,6 +101,8 @@ public:
 	inline void setProp(quint8 i, const QPAssetSpec &p) { mProps[i] = p; }
 	inline qint16 color() const { return mColor; }
 	inline void setColor(qint16 c) { if (c < 16) mColor = c; }
+	inline Draw drawFlag() const { return mDraw; }
+	inline void setDrawFlag(Draw d) { mDraw = d; }
 signals:
 	void readyRead();
 #ifndef SERVER
@@ -115,6 +123,7 @@ private:
 	qint32 mAuxFlags, mId;
 	qint16 mStatus, mRoom, mFace, mColor;
 	Vendor mVendor;
+	Draw mDraw;
 #ifndef SERVER
 	bool mNetEndian;
 #endif // SERVER

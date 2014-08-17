@@ -69,8 +69,8 @@ signals:
 	void userLoggedOn(const QPConnection *c);
 	void userLoggedOff(const QPConnection *c);
 	void userMoved(const QPRoom *r, const QPConnection *c);
-	void userDrew(const QPRoom *r, const QPConnection *c, const QByteArray &draw);
-	void userTalked(const QPRoom *r, QPMessage &msg);
+	void userDrew(const QPRoom *r, const QPMessage &msg);
+	void userTalked(const QPRoom *r, const QPMessage &msg);
 private slots:
 	void handlePing();
 	void handleNewConnection();
@@ -98,6 +98,7 @@ private:
 	void blowThru(QPBlowThru *blow);
 	void logoff(QPConnection *c);
 	void checkConnections();
+	QPMessage* talk(const char *text, qint32 relay = 0);
 };
 
 #endif // _SERVER_H

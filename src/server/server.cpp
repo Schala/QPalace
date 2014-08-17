@@ -72,8 +72,8 @@ bool QPServer::loadDb()
 		connect(this, SIGNAL(userLeftRoom(const QPRoom*,QPConnection*)), mRooms.last(), SLOT(handleUserLeft(const QPRoom*,QPConnection*)));
 		connect(this, SIGNAL(userMoved(const QPRoom*,const QPConnection*)), mRooms.last(), SLOT(handleUserMoved(const QPRoom*,const QPConnection*)));
 		connect(this, SIGNAL(roomBlowThru(const QPRoom*,QPBlowThru*)), mRooms.last(), SLOT(handleBlowThru(const QPRoom*,QPBlowThru*)));
-		connect(this, SIGNAL(userTalked(const QPRoom*,QPMessage&)), mRooms.last(), SLOT(handleUserTalked(const QPRoom*,QPMessage&)));
-		connect(this, SIGNAL(userDrew(const QPRoom*,const QPConnection*,const QByteArray&)), mRooms.last(), SLOT(handleUserDrew(const QPRoom*,const QPConnection*,const QByteArray&)));
+		connect(this, SIGNAL(userTalked(const QPRoom*,const QPMessage&)), mRooms.last(), SLOT(handleUserTalked(const QPRoom*,const QPMessage&)));
+		connect(this, SIGNAL(userDrew(const QPRoom*,const QPMessage&)), mRooms.last(), SLOT(handleUserDrew(const QPRoom*,const QPMessage&)));
 	}
 	return true;
 }
@@ -214,7 +214,7 @@ QVariant QPServer::createRoom(const QString &name, qint32 flags, const QString &
 	connect(this, SIGNAL(userLeftRoom(const QPRoom*,QPConnection*)), mRooms.last(), SLOT(handleUserLeft(const QPRoom*,QPConnection*)));
 	connect(this, SIGNAL(userMoved(const QPRoom*,const QPConnection*)), mRooms.last(), SLOT(handleUserMoved(const QPRoom*,const QPConnection*)));
 	connect(this, SIGNAL(roomBlowThru(const QPRoom*,QPBlowThru*)), mRooms.last(), SLOT(handleBlowThru(const QPRoom*,QPBlowThru*)));
-	connect(this, SIGNAL(userDrew(const QPRoom*,const QPConnection*,const QByteArray&)), mRooms.last(), SLOT(handleUserDrew(const QPRoom*,const QPConnection*,const QByteArray&)));
+	connect(this, SIGNAL(userDrew(const QPRoom*,const QPMessage&)), mRooms.last(), SLOT(handleUserDrew(const QPRoom*,const QPMessage&)));
 	return q.lastInsertId();
 }
 
@@ -346,6 +346,15 @@ void QPServer::checkConnections()
 	}
 }
 
+QPMessage* QPServer::talk(const char *text, qint32 relay)
+{
+	QPMessage *msg = new QPMessage(QPMessage::talk, relay);
+	(*msg) = text;
+	msg->ensureNullEnd();
+	qDebug("[%s] %s", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")), text);
+	return msg;
+}
+
 void QPServer::handleNewConnection()
 {
 	QPConnection *c = new QPConnection(this, mServer->nextPendingConnection());
@@ -450,6 +459,7 @@ void QPServer::handleReadyRead()
 			c->setPosition(0, 0); // placeholder, todo: fetch room bg width/height and randomise pos
 			c->setRoom(1);
 			c->setStatus(0);
+			c->setDrawFlag(QPConnection::Draw::None);
 
 			// MSG_SERVERVERSION
 			{
@@ -560,8 +570,19 @@ void QPServer::handleReadyRead()
 			break;
 		case QPMessage::draw:
 		{
-			QByteArray ba(msg.data(), msg.size());
-			emit userDrew(mRoomLut[c->room()], c, ba);
+			emit userDrew(mRoomLut[c->room()], msg);
+			if ((msg.data(4) != 3) && (msg.data(4) != 4) && (c->drawFlag() != QPConnection::Draw::Paint))
+			{
+				QPMessage *tmsg = talk(QByteArray(";").append(c->userName()).append(" is Painting").constData());
+				c->setDrawFlag(QPConnection::Draw::Paint);
+				emit userTalked(mRoomLut[c->room()], *tmsg);
+			}
+			if (((msg.data(4) == 3) || (msg.data(4) == 4)) && (c->drawFlag() != QPConnection::Draw::Erase))
+			{
+				QPMessage *tmsg = talk(QByteArray(";").append(c->userName()).append(" is Erasing").constData());
+				c->setDrawFlag(QPConnection::Draw::Erase);
+				emit userTalked(mRoomLut[c->room()], *tmsg);
+			}
 			break;
 		}
 		default:

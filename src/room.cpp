@@ -658,7 +658,7 @@ void QPRoom::handleBlowThru(const QPRoom *r, QPBlowThru *blow)
 	}
 }
 
-void QPRoom::handleUserTalked(const QPRoom *r, QPMessage &msg)
+void QPRoom::handleUserTalked(const QPRoom *r, const QPMessage &msg)
 {
 	if (this == r)
 		for (auto p: mConnections)
@@ -669,32 +669,22 @@ void QPRoom::handleUserTalked(const QPRoom *r, QPMessage &msg)
 		}
 }
 
-void QPRoom::handleUserDrew(const QPRoom *r, const QPConnection *c, const QByteArray &draw)
+void QPRoom::handleUserDrew(const QPRoom *r, const QPMessage &msg)
 {
 	if (this == r)
 	{
-		if ((draw[4] == 4) && !mDraws.empty()) // cmd == delete
+		if ((msg.data(4) == 4) && !mDraws.empty()) // cmd == delete
 			mDraws.removeLast();
-		else if ((draw[4] == 3) && !mDraws.empty()) // cmd == detonate
+		else if ((msg.data(4) == 3) && !mDraws.empty()) // cmd == detonate
 			mDraws.clear();
 		else
+			mDraws.append(QByteArray(msg.data(), msg.size()));
+
+		for (auto p: mConnections)
 		{
-			mDraws.append(draw);
-			QPMessage msg(QPMessage::draw);
-			QByteArray ba;
-			QDataStream ds1(&ba, QIODevice::WriteOnly);
-			ds1.device()->reset();
-			ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-
-			ds1.writeRawData(draw.constData(), draw.size());
-			msg = ba;
-
-			for (auto p: mConnections)
-			{
-				QDataStream ds(p->socket());
-				ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-				ds << msg;
-			}
+			QDataStream ds(p->socket());
+			ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+			ds << msg;
 		}
 	}
 }

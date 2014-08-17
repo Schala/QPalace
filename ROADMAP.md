@@ -33,7 +33,6 @@ QPServer 1.0 - full functionality of PServer (late summer-early fall 2014)
 - spot new
 - spot state
 - superuser
-- talk
 - user color
 - user desc
 - user face

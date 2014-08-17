@@ -95,7 +95,9 @@ public:
 	inline qint32 ref() const { return mRef; }
 	inline void setRef(qint32 i) { mRef = i; }
 	inline const char* data() const { return mData; }
+	inline char data(quint32 i) const {return mData[i]; }
 	inline QPMessage& operator=(const QByteArray &data) { mData = data; return *this; }
+	inline void ensureNullEnd() { if (!mData.endsWith('\0')) mData += '\0'; }
 #ifndef QT_NO_DEBUG
 	void dump() const;
 #endif // QT_NO_DEBUG

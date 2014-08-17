@@ -163,11 +163,11 @@ public:
 	inline const char* name() const { return mName; }
 public slots:
 	void handleBlowThru(const QPRoom *r, QPBlowThru *blow);
-	void handleUserDrew(const QPRoom *r, const QPConnection *c, const QByteArray &draw);
+	void handleUserDrew(const QPRoom *r, const QPMessage &msg);
 	void handleUserJoined(const QPRoom *r, QPConnection *c);
 	void handleUserLeft(const QPRoom *r, QPConnection *c);
 	void handleUserMoved(const QPRoom *r, const QPConnection *c);
-	void handleUserTalked(const QPRoom *r, QPMessage &msg);
+	void handleUserTalked(const QPRoom *r, const QPMessage &msg);
 private:
 	QVector<QPConnection*> mConnections;
 	QByteArray mName, mImgName, mArtistName, mPwd;
