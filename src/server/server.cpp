@@ -5,7 +5,9 @@
 #include <QMutex>
 #include <QSqlQuery>
 #include <QStandardPaths>
+#include <QString>
 #include <qtconcurrentrun.h>
+#include <QTextStream>
 #include <QThread>
 #include <QThreadPool>
 #include <QTimer>
@@ -72,7 +74,7 @@ bool QPServer::loadDb()
 		connect(this, SIGNAL(userLeftRoom(const QPRoom*,QPConnection*)), mRooms.last(), SLOT(handleUserLeft(const QPRoom*,QPConnection*)));
 		connect(this, SIGNAL(userMoved(const QPRoom*,const QPConnection*)), mRooms.last(), SLOT(handleUserMoved(const QPRoom*,const QPConnection*)));
 		connect(this, SIGNAL(roomBlowThru(const QPRoom*,QPBlowThru*)), mRooms.last(), SLOT(handleBlowThru(const QPRoom*,QPBlowThru*)));
-		connect(this, SIGNAL(userTalked(const QPRoom*,const QPMessage&)), mRooms.last(), SLOT(handleUserTalked(const QPRoom*,const QPMessage&)));
+		connect(this, SIGNAL(userTalked(const QPRoom*,QPMessage*)), mRooms.last(), SLOT(handleUserTalked(const QPRoom*,QPMessage*)));
 		connect(this, SIGNAL(userDrew(const QPRoom*,const QPMessage&)), mRooms.last(), SLOT(handleUserDrew(const QPRoom*,const QPMessage&)));
 	}
 	return true;
@@ -86,14 +88,16 @@ bool QPServer::start()
 		return false;
 	}
 
-	QThread *thread = new QThread(this);
+	QThread *timerThread = new QThread(this);
 	QTimer *timer = new QTimer(nullptr);
 	timer->setInterval(mPing);
-	timer->moveToThread(thread);
+	timer->moveToThread(timerThread);
 	connect(timer, SIGNAL(timeout()), this, SLOT(handlePing()), Qt::DirectConnection);
-	connect(thread, SIGNAL(started()), timer, SLOT(start()));
-	thread->start();
+	connect(timerThread, SIGNAL(started()), timer, SLOT(start()));
+	timerThread->start();
 	
+	QFuture<void> consoleFuture = QtConcurrent::run(this, &QPServer::consoleInput);
+
 	return true;
 }
 
@@ -215,6 +219,7 @@ QVariant QPServer::createRoom(const QString &name, qint32 flags, const QString &
 	connect(this, SIGNAL(userMoved(const QPRoom*,const QPConnection*)), mRooms.last(), SLOT(handleUserMoved(const QPRoom*,const QPConnection*)));
 	connect(this, SIGNAL(roomBlowThru(const QPRoom*,QPBlowThru*)), mRooms.last(), SLOT(handleBlowThru(const QPRoom*,QPBlowThru*)));
 	connect(this, SIGNAL(userDrew(const QPRoom*,const QPMessage&)), mRooms.last(), SLOT(handleUserDrew(const QPRoom*,const QPMessage&)));
+	connect(this, SIGNAL(userTalked(const QPRoom*,QPMessage*)), mRooms.last(), SLOT(handleUserTalked(const QPRoom*,QPMessage*)));
 	return q.lastInsertId();
 }
 
@@ -349,10 +354,32 @@ void QPServer::checkConnections()
 QPMessage* QPServer::talk(const char *text, qint32 relay)
 {
 	QPMessage *msg = new QPMessage(QPMessage::talk, relay);
-	(*msg) = text;
+	*msg = text;
 	msg->ensureNullEnd();
 	qDebug("[%s] %s", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")), text);
 	return msg;
+}
+
+void QPServer::consoleInput()
+{
+	QTextStream stream(stdin);
+	QString line;
+	do
+	{
+		line = stream.readLine();
+		if (line.startsWith("say"))
+		{
+			QTextStream parser(&line);
+			qint16 roomId;
+			parser.read(3);
+			parser.skipWhiteSpace();
+			parser >> roomId;
+			parser.skipWhiteSpace();
+			QPMessage *msg = talk(parser.readLine().toLatin1().constData());
+			emit userTalked(mRoomLut[roomId], msg);
+		}
+	}
+	while (line != "stop");
 }
 
 void QPServer::handleNewConnection()
@@ -552,7 +579,7 @@ void QPServer::handleReadyRead()
 					mRoomLut[c->room()]->name(), c->userName(), text);
 				mCodec.encode(text, len-1);
 			}
-			emit userTalked(mRoomLut[c->room()], msg);
+			emit userTalked(mRoomLut[c->room()], &msg);
 			break;
 		}
 		case QPMessage::ping:
@@ -575,13 +602,13 @@ void QPServer::handleReadyRead()
 			{
 				QPMessage *tmsg = talk(QByteArray(";").append(c->userName()).append(" is Painting").constData());
 				c->setDrawFlag(QPConnection::Draw::Paint);
-				emit userTalked(mRoomLut[c->room()], *tmsg);
+				emit userTalked(mRoomLut[c->room()], tmsg);
 			}
 			if (((msg.data(4) == 3) || (msg.data(4) == 4)) && (c->drawFlag() != QPConnection::Draw::Erase))
 			{
 				QPMessage *tmsg = talk(QByteArray(";").append(c->userName()).append(" is Erasing").constData());
 				c->setDrawFlag(QPConnection::Draw::Erase);
-				emit userTalked(mRoomLut[c->room()], *tmsg);
+				emit userTalked(mRoomLut[c->room()], tmsg);
 			}
 			break;
 		}

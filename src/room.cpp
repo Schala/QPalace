@@ -2,10 +2,6 @@
 #include <QException>
 #include <QtMath>
 
-#ifndef QT_NO_DEBUG
-#include <QTextStream>
-#endif // QT_NO_DEBUG
-
 #include "room.hpp"
 
 #ifdef SERVER
@@ -658,15 +654,18 @@ void QPRoom::handleBlowThru(const QPRoom *r, QPBlowThru *blow)
 	}
 }
 
-void QPRoom::handleUserTalked(const QPRoom *r, const QPMessage &msg)
+void QPRoom::handleUserTalked(const QPRoom *r, QPMessage *msg)
 {
 	if (this == r)
+	{
 		for (auto p: mConnections)
 		{
 			QDataStream ds(p->socket());
 			ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-			ds << msg;
+			ds << *msg;
 		}
+		delete msg;
+	}
 }
 
 void QPRoom::handleUserDrew(const QPRoom *r, const QPMessage &msg)

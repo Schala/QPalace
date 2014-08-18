@@ -21,15 +21,3 @@ QDataStream& operator>>(QDataStream &in, QPMessage &msg)
 	msg.mData = QByteArray(buf, size);
 	return in;
 }
-
-#ifndef QT_NO_DEBUG
-void QPMessage::dump() const
-{
-	QFile file(QString("/tmp/").append(QString().setNum(mId, 16)).append(".dat"));
-	if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
-		qWarning("QPServer is too constipated and unable to take a packet dump!");
-	QDataStream ds(&file);
-	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-	ds << *this;
-}
-#endif // QT_NO_DEBUG

@@ -98,9 +98,6 @@ public:
 	inline char data(quint32 i) const {return mData[i]; }
 	inline QPMessage& operator=(const QByteArray &data) { mData = data; return *this; }
 	inline void ensureNullEnd() { if (!mData.endsWith('\0')) mData += '\0'; }
-#ifndef QT_NO_DEBUG
-	void dump() const;
-#endif // QT_NO_DEBUG
 private:
 	QByteArray mData;
 	quint32 mId;

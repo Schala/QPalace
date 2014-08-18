@@ -167,7 +167,7 @@ public slots:
 	void handleUserJoined(const QPRoom *r, QPConnection *c);
 	void handleUserLeft(const QPRoom *r, QPConnection *c);
 	void handleUserMoved(const QPRoom *r, const QPConnection *c);
-	void handleUserTalked(const QPRoom *r, const QPMessage &msg);
+	void handleUserTalked(const QPRoom *r, QPMessage *msg);
 private:
 	QVector<QPConnection*> mConnections;
 	QByteArray mName, mImgName, mArtistName, mPwd;
