@@ -18,6 +18,26 @@
 #include "../message.hpp"
 #include "../room.hpp"
 
+struct QPServerDown final
+{
+	enum
+	{
+		LoggedOff = 1,
+		CommError,
+		Flood,
+		KilledByPlayer,
+		ServerDown,
+		Unresponsive,
+		KilledBySysop,
+		ServerFull,
+		DuplicateUser = 10,
+		DeathPenaltyActive,
+		Banished,
+		BanishKill,
+		Verbose = 16
+	};
+};
+
 class QPServer final: public QObject
 {
 	Q_OBJECT

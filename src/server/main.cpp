@@ -36,6 +36,7 @@ void generateSettings(QJsonObject &data)
 	data["unicodeEnabled"] = true;
 	data["pingIntervalSecs"] = 300;
 	data["pongIntervalSecs"] = 5;
+	//data["roomDrawLimit"] =
 }
 
 int main(int argc, char *argv[])
@@ -91,5 +92,6 @@ int main(int argc, char *argv[])
 		return -1;
 	
 	qDebug("Server is online and listening on port %u", server->port());
+	qDebug("Type in `help` for a list of commands and their info");
 	return app.exec();
 }

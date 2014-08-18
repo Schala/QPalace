@@ -65,7 +65,7 @@ bool QPConnection::isSecureVendor() const
 
 const char* QPConnection::osToString() const
 {
-	qint32 flags = mAuxFlags & 0xff;
+	qint32 flags = mAux & 0xff;
 	
 	switch (flags)
 	{
@@ -83,4 +83,36 @@ const char* QPConnection::osToString() const
 void QPConnection::handleReadyRead()
 {
 	emit readyRead();
+}
+
+QPMessage& operator<<(QPMessage &msg, const QPConnection *c)
+{
+	QByteArray ba;
+	QDataStream ds(&ba, QIODevice::WriteOnly);
+	ds.device()->reset();
+	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+	ds << c->id();
+	ds << c->position().x << c->position().y;
+	for (quint8 j = 0; j < 9; j++)
+		ds << c->prop(j).id << c->prop(j).crc;
+	ds << c->room();
+	ds << c->face();
+	ds << c->color();
+	ds << (qint32)0; // not used
+
+	qint16 activeProps = 0;
+	for (quint8 j = 0; j < 9; j++)
+		if (c->prop(j).id && c->prop(j).crc)
+			activeProps++;
+	ds << activeProps;
+
+	quint8 nlen = qstrlen(c->userName());
+	ds << nlen;
+	ds.writeRawData(c->userName(), nlen);
+	for (quint8 j = 0; j < (31 - nlen); j++)
+		ds << (quint8)0;
+
+	msg << ba;
+	return msg;
 }

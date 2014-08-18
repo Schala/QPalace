@@ -48,7 +48,7 @@ public:
 		qAst = 0x71417374,
 		qFil = 0x7146696c,
 		rAst = 0x72417374,
-		rLst = 0x724c7474,
+		rLst = 0x724c7374,
 		regi = 0x72656769,
 		rep2 = 0x72657032, // legacy, unused in server, ignored by client
 		resp = 0x72657370, // ?
@@ -98,6 +98,7 @@ public:
 	inline char data(quint32 i) const {return mData[i]; }
 	inline QPMessage& operator=(const QByteArray &data) { mData = data; return *this; }
 	inline void ensureNullEnd() { if (!mData.endsWith('\0')) mData += '\0'; }
+	inline QPMessage& operator<<(const QByteArray &data) { mData += data; return *this; }
 private:
 	QByteArray mData;
 	quint32 mId;

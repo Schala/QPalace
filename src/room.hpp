@@ -161,6 +161,7 @@ public:
 	inline qint32 population() const { return mConnections.size(); }
 	inline QPConnection* user(qint32 i) const { return mConnections[i]; }
 	inline const char* name() const { return mName; }
+	inline qint32 flags() const { return mFlags; }
 public slots:
 	void handleBlowThru(const QPRoom *r, QPBlowThru *blow);
 	void handleUserDrew(const QPRoom *r, const QPMessage &msg);

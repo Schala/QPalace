@@ -1,6 +1,9 @@
 #include <QDateTime>
+
+#ifndef SERVER
 #include <QException>
 #include <QtMath>
+#endif // SERVER
 
 #include "room.hpp"
 
@@ -311,38 +314,12 @@ void QPRoom::description(QPConnection *c, bool revised) const
 
 void QPRoom::users(QPConnection *c) const
 {
-	QByteArray ba;
-	QDataStream ds1(&ba, QIODevice::WriteOnly);
-	ds1.device()->reset();
-	ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-
-	for (qint32 i = 0; i < population(); i++)
-	{
-		ds1 << user(i)->id();
-		ds1 << user(i)->position().x << user(i)->position().y;
-		for (quint8 j = 0; j < 9; j++)
-			ds1 << user(i)->prop(j).id << user(i)->prop(j).crc;
-		ds1 << user(i)->room();
-		ds1 << user(i)->face();
-		ds1 << user(i)->color();
-		ds1 << (qint32)0; // not used
-
-		qint16 activeProps = 0;
-		for (quint8 j = 0; j < 9; j++)
-			if (user(i)->prop(j).id && user(i)->prop(j).crc)
-				activeProps++;
-		ds1 << activeProps;
-
-		quint8 nlen = qstrlen(user(i)->userName());
-		ds1 << nlen;
-		ds1.writeRawData(user(i)->userName(), nlen);
-		for (quint8 j = 0; j < (31 - nlen); j++)
-			ds1 << (quint8)0;
-	}
-
 	QPMessage rprs(QPMessage::rprs, population());
+
+	for (auto p: mConnections)
+		rprs << p;
+
 	QPMessage endr(QPMessage::endr);
-	rprs = ba;
 	QDataStream ds(c->socket());
 	ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 	ds << rprs << endr;
@@ -554,35 +531,8 @@ void QPRoom::handleUserJoined(const QPRoom *r, QPConnection *c)
 	if (this == r)
 	{
 		mConnections.append(c);
-
 		QPMessage nprs(QPMessage::nprs, c->id());
-		QByteArray ba;
-		QDataStream ds1(&ba, QIODevice::WriteOnly);
-		ds1.device()->reset();
-		ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
-
-		ds1 << c->id();
-		ds1 << c->position().x << c->position().y;
-		for (quint8 j = 0; j < 9; j++)
-			ds1 << c->prop(j).id << c->prop(j).crc;
-		ds1 << c->room();
-		ds1 << c->face();
-		ds1 << c->color();
-		ds1 << (qint32)0; // not used
-
-		qint16 activeProps = 0;
-		for (quint8 j = 0; j < 9; j++)
-			if (c->prop(j).id && c->prop(j).crc)
-				activeProps++;
-		ds1 << activeProps;
-
-		quint8 nlen = qstrlen(c->userName());
-		ds1 << nlen;
-		ds1.writeRawData(c->userName(), nlen);
-		for (quint8 j = 0; j < (31 - nlen); j++)
-			ds1 << (quint8)0;
-
-		nprs = ba;
+		nprs << c;
 
 		for (auto p: mConnections)
 		{
@@ -590,8 +540,8 @@ void QPRoom::handleUserJoined(const QPRoom *r, QPConnection *c)
 			ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
 			ds << nprs;
 
-			if (p != c)
-				description(p, true);
+			/*if (p != c)
+				description(p, true);*/
 		}
 	}
 }

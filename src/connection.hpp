@@ -74,7 +74,7 @@ public:
 	bool isSecureVendor() const;
 	inline void setVendor(Vendor v) { mVendor = v; }
 	inline void setWizardPassword(const char *pwd, quint8 l) { if (pwd) mWizardPwd = QByteArray(pwd, l); }
-	inline void setAuxFlags(qint32 flags) { mAuxFlags = flags; }
+	inline void setAuxFlags(qint32 flags) { mAux = flags; }
 	inline void setRoom(qint16 id) { mRoom = id; }
 	inline void setId(qint32 id) { mId = id; }
 	const char* osToString() const;
@@ -85,7 +85,7 @@ public:
 	inline QPUserId& pseudoId() const { return mUid; }
 #endif // SERVER
 	inline QTcpSocket* socket() const { return mSocket; }
-	inline qint32 auxFlags() const { return mAuxFlags; }
+	inline qint32 auxFlags() const { return mAux; }
 	inline const char* userName() const { return mUserName; }
 	inline void setUserName(const char *username) { if (username) mUserName = QByteArray(username); }
 	inline const char* wizardPassword() const { return mWizardPwd; }
@@ -94,7 +94,7 @@ public:
 	inline qint16 room() const { return mRoom; }
 	inline qint32 id() const { return mId; }
 	inline qint16 face() const { return mFace; }
-	inline void setFace(qint16 f) { if (f < 16) mFace = f; }
+	inline void setFace(qint16 f) { if (f < 13) mFace = f; }
 	inline const QPPoint position() const { return mPos; }
 	inline void setPosition(qint16 x, qint16 y) { mPos.x = x; mPos.y = y; }
 	inline QPAssetSpec prop(quint8 i) const { return mProps[i]; }
@@ -120,7 +120,7 @@ private:
 	QPAssetSpec mProps[9];
 	QByteArray mUserName, mWizardPwd;
 	QPPoint mPos;
-	qint32 mAuxFlags, mId;
+	qint32 mAux, mId;
 	qint16 mStatus, mRoom, mFace, mColor;
 	Vendor mVendor;
 	Draw mDraw;
@@ -128,5 +128,11 @@ private:
 	bool mNetEndian;
 #endif // SERVER
 };
+
+#ifdef SERVER
+QPMessage& operator<<(QPMessage &msg, const QPConnection *c);
+#else
+QDataStream& operator>>(QPMessage &msg, QPConnection *c);
+#endif // SERVER
 
 #endif // _CONNECTION_H

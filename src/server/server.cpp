@@ -1,3 +1,4 @@
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
@@ -367,6 +368,7 @@ void QPServer::consoleInput()
 	do
 	{
 		line = stream.readLine();
+
 		if (line.startsWith("say"))
 		{
 			QTextStream parser(&line);
@@ -378,8 +380,24 @@ void QPServer::consoleInput()
 			QPMessage *msg = talk(parser.readLine().toLatin1().constData());
 			emit userTalked(mRoomLut[roomId], msg);
 		}
+
+		if (line.startsWith("help"))
+		{
+			qDebug("say <room ID> <message>\t\t\tsends a chat message to the specified room ID");
+			qDebug("stop\t\t\t\t\tstops the server");
+		}
 	}
-	while (line != "stop");
+	while (!line.startsWith("stop"));
+
+	QPMessage down(QPMessage::down, QPServerDown::ServerDown);
+	for (auto c: mConnections)
+	{
+		QDataStream ds(c->socket());
+		ds.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+		ds << down;
+	}
+	mServer->close();
+	QCoreApplication::exit();
 }
 
 void QPServer::handleNewConnection()
@@ -481,7 +499,7 @@ void QPServer::handleReadyRead()
 
 			emit userLoggedOn(c);
 			qsrand(QDateTime::currentDateTime().toTime_t());
-			c->setFace(qrand() % 16);
+			c->setFace(qrand() % 13);
 			c->setColor(qrand() % 16);
 			c->setPosition(0, 0); // placeholder, todo: fetch room bg width/height and randomise pos
 			c->setRoom(1);
@@ -536,20 +554,18 @@ void QPServer::handleReadyRead()
 			mRoomLut[c->room()]->description(c, false);
 			mRoomLut[c->room()]->users(c);
 			emit userJoinedRoom(mRoomLut[c->room()], c);
-
-			break;
 		}
+			break;
+
 		case QPMessage::sRom:
-		{
 			emit roomEdited(mRoomLut[c->room()]);
 			break;
-		}
+
 		case QPMessage::uLoc:
-		{
 			userMove(c, msg);
 			emit userMoved(mRoomLut[c->room()], c);
 			break;
-		}
+
 		case QPMessage::blow:
 		{
 			QPBlowThru *blow = new QPBlowThru();
@@ -558,10 +574,10 @@ void QPServer::handleReadyRead()
 				emit roomBlowThru(mRoomLut[c->room()], blow);
 			else
 				blowThru(blow);
-			break;
 		}
+			break;
+
 		case QPMessage::xtlk:
-		{
 			if (mOptions & ChatLog)
 			{
 				QByteArray ba(msg.data(), msg.size());
@@ -581,22 +597,20 @@ void QPServer::handleReadyRead()
 			}
 			emit userTalked(mRoomLut[c->room()], &msg);
 			break;
-		}
+
 		case QPMessage::ping:
-		{
 			msg.setId(QPMessage::pong);
 			ds << msg;
 			break;
-		}
+
 		case QPMessage::bye:
-		{
 			logoff(c);
 			break;
-		}
+
 		case QPMessage::pong:
 			break;
+
 		case QPMessage::draw:
-		{
 			emit userDrew(mRoomLut[c->room()], msg);
 			if ((msg.data(4) != 3) && (msg.data(4) != 4) && (c->drawFlag() != QPConnection::Draw::Paint))
 			{
@@ -611,7 +625,61 @@ void QPServer::handleReadyRead()
 				emit userTalked(mRoomLut[c->room()], tmsg);
 			}
 			break;
+
+		case QPMessage::talk:
+			if (mOptions & ChatLog)
+			{
+				const char *text = msg.data();
+				qDebug("[%s - %s] %s: %s", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
+					mRoomLut[c->room()]->name(), c->userName(), text);
+			}
+			emit userTalked(mRoomLut[c->room()], &msg);
+			break;
+
+		case QPMessage::uLst:
+		{
+			QPMessage ulst(QPMessage::uLst, (qint32)mConnections.size());
+			QByteArray ba;
+			QDataStream ds1(&ba, QIODevice::WriteOnly);
+			ds1.device()->reset();
+			ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+			for (auto p: mConnections)
+			{
+				ds1 << p->id() << p->status() << p->room();
+				quint8 nlen = qstrlen(p->userName());
+				ds1 << nlen;
+				ds1.writeRawData(p->userName(), nlen);
+				for (quint8 j = 0; j < (31 - nlen); j++)
+					ds1 << (quint8)0;
+			}
+
+			ulst = ba;
+			ds << ulst;
 		}
+			break;
+		case QPMessage::rLst:
+		{
+			QPMessage rlst(QPMessage::rLst, (qint32)mRooms.size());
+			QByteArray ba;
+			QDataStream ds1(&ba, QIODevice::WriteOnly);
+			ds1.device()->reset();
+			ds1.setByteOrder(Q_BYTE_ORDER == Q_BIG_ENDIAN ? QDataStream::BigEndian : QDataStream::LittleEndian);
+
+			for (auto r: mRooms)
+			{
+				ds1 << (qint32)r->id() << (qint16)r->flags() << (qint16)r->population();
+				quint8 nlen = qstrlen(r->name());
+				ds1 << nlen;
+				ds1.writeRawData(r->name(), nlen);
+				for (quint8 j = 0; j < (31 - nlen); j++)
+					ds1 << (quint8)0;
+			}
+
+			rlst = ba;
+			ds << rlst;
+		}
+			break;
 		default:
 			qWarning("[%s] %s:%u has sent an unknown or unsupported packet (%X). Ignoring...", qPrintable(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss A")),
 				qPrintable(c->socket()->peerAddress().toString()), c->socket()->peerPort(), msg.id());
